@@ -1,4 +1,4 @@
-// Shotsy Data Store - localStorage persistence layer
+// Jab It Data Store - localStorage persistence layer
 const Store = (() => {
   const KEYS = {
     PROFILE: 'shotsy_profile',
