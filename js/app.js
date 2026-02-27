@@ -1,4 +1,4 @@
-// Weight Tracker - Main Application Controller
+// Jab It: Weight Loss Tracker - Main Application Controller
 const App = (() => {
   let weightSummaryChart, weightFullChart, doseChart, doseRingChart;
   let currentProgressRange = 'all';
