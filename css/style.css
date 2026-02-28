@@ -1874,6 +1874,176 @@ a { color: var(--primary); text-decoration: none; }
   }
 }
 
+/* --- Period Summary Card --- */
+.period-summary-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.period-summary-card .section-title {
+  margin-bottom: 12px;
+}
+
+.period-summary-grid {
+  display: flex;
+  gap: 0;
+}
+
+.period-summary-col {
+  flex: 1;
+  text-align: center;
+}
+
+.period-summary-divider {
+  width: 1px;
+  background: var(--border);
+  margin: 0 12px;
+}
+
+.period-summary-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.period-summary-stat {
+  margin-bottom: 6px;
+}
+
+.period-summary-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  display: block;
+}
+
+.period-summary-value.loss {
+  color: var(--success, #10b981);
+}
+
+.period-summary-value.gain {
+  color: var(--danger, #ef4444);
+}
+
+.period-summary-sub {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+/* --- What-If Calculator --- */
+.whatif-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.whatif-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.whatif-header .section-title {
+  margin: 0;
+}
+
+.whatif-chevron {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+}
+
+.whatif-body {
+  padding: 0 16px 16px;
+}
+
+.whatif-unit {
+  font-weight: 600;
+  color: var(--text-secondary, var(--text-muted));
+  white-space: nowrap;
+}
+
+.whatif-result {
+  font-size: 0.9rem;
+  color: var(--text-secondary, var(--text));
+  line-height: 1.5;
+  margin-top: 12px;
+  min-height: 1.5em;
+}
+
+.whatif-result strong {
+  color: var(--primary);
+}
+
+/* --- Dose-Weight Correlation --- */
+.correlation-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.correlation-item {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.correlation-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.correlation-dose-change {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.correlation-date {
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.correlation-rates {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.correlation-arrow {
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.correlation-arrow.positive {
+  color: var(--success, #10b981);
+}
+
+.correlation-arrow.negative {
+  color: var(--danger, #ef4444);
+}
+
+.correlation-arrow.neutral {
+  color: var(--text-muted);
+}
+
 /* --- Focus visible outlines for accessibility --- */
 a:focus-visible,
 button:focus-visible,
