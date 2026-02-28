@@ -51,6 +51,7 @@ const Store = (() => {
       doseReminderEnabled: false,
       weighInReminderEnabled: false,
       onboardingComplete: false,
+      lastReminderCheckAt: null,
     },
     goals: {
       targetWeight: '',
@@ -428,10 +429,17 @@ const Store = (() => {
 
   // Settings
   function getSettings() {
-    return get(KEYS.SETTINGS) || { ...defaults.settings };
+    return { ...defaults.settings, ...(get(KEYS.SETTINGS) || {}) };
   }
   function saveSettings(settings) {
-    return set(KEYS.SETTINGS, settings);
+    const merged = {
+      ...defaults.settings,
+      ...(settings || {}),
+    };
+    if (typeof merged.lastReminderCheckAt === 'undefined') {
+      merged.lastReminderCheckAt = null;
+    }
+    return set(KEYS.SETTINGS, merged);
   }
 
   // Unit conversion helper
