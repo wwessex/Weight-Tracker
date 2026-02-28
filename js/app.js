@@ -5,12 +5,16 @@ const App = (() => {
   let currentDoseRange = 'all';
   let countdownInterval = null;
   let remindersInterval = null;
+  let isUiBound = false;
+  let isHashListenerBound = false;
+  let isGlobalListenersBound = false;
+  let isPhotoStorageChecked = false;
   const REMINDER_CHECK_INTERVAL_MS = 30 * 60 * 1000;
 
   // ===== INIT =====
   function init() {
     applyTheme();
-    window.addEventListener('beforeunload', teardownReminderChecks);
+    bindGlobalListeners();
     const profile = Store.getProfile();
     if (!profile.name) {
       document.getElementById('onboarding-modal').style.display = 'flex';
@@ -25,19 +29,46 @@ const App = (() => {
   }
 
   function bootApp() {
-    teardownReminderChecks();
-    applyTheme();
+    bindUiOnce();
+    refreshApp();
+  }
+
+  function bindGlobalListeners() {
+    if (isGlobalListenersBound) return;
+    window.addEventListener('beforeunload', teardownReminderChecks);
+    isGlobalListenersBound = true;
+  }
+
+  function bindUiOnce() {
+    if (isUiBound) return;
+
     initNavigation();
     initSummaryPage();
     initDosesPage();
     initProgressPage();
     initSettingsPage();
     initModals();
-    Store.ensurePhotoStorageReady().catch(() => {
-      toast('Photo storage is unavailable in this browser.', 'error');
-    });
+
+    if (!isPhotoStorageChecked) {
+      isPhotoStorageChecked = true;
+      Store.ensurePhotoStorageReady().catch(() => {
+        toast('Photo storage is unavailable in this browser.', 'error');
+      });
+    }
+
+    if (!isHashListenerBound) {
+      window.addEventListener('hashchange', handleHashChange);
+      isHashListenerBound = true;
+    }
+
+    isUiBound = true;
+  }
+
+  function refreshApp() {
+    teardownReminderChecks();
+    applyTheme();
+    renderAllPages();
     handleHashChange();
-    window.addEventListener('hashchange', handleHashChange);
     // Show tour if first time
     const settings = Store.getSettings();
     if (!settings.onboardingComplete) {
@@ -46,6 +77,13 @@ const App = (() => {
     // Schedule reminder checks
     checkReminders();
     scheduleReminderChecks();
+  }
+
+  function renderAllPages() {
+    refreshSummary();
+    refreshDoses();
+    refreshProgress();
+    refreshSettings();
   }
 
   function teardownReminderChecks() {
@@ -134,13 +172,13 @@ const App = (() => {
       overlay.style.display = 'flex';
     }
 
-    nextBtn.addEventListener('click', () => { step++; show(); });
-    skipBtn.addEventListener('click', () => {
+    nextBtn.onclick = () => { step++; show(); };
+    skipBtn.onclick = () => {
       overlay.style.display = 'none';
       const settings = Store.getSettings();
       settings.onboardingComplete = true;
       Store.saveSettings(settings);
-    });
+    };
     show();
   }
 
