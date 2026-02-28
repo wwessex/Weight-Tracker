@@ -8,7 +8,17 @@ const Store = (() => {
     SETTINGS: 'shotsy_settings',
     VICTORIES: 'shotsy_victories',
     PHOTOS: 'shotsy_photos',
+    PHOTOS_MIGRATED: 'shotsy_photos_migrated_v1',
   };
+
+  const PHOTO_DB = {
+    NAME: 'shotsy_photo_db',
+    VERSION: 1,
+    STORE: 'photos',
+  };
+
+  let photoDbPromise = null;
+  let photoMigrationPromise = null;
 
   const defaults = {
     profile: {
@@ -56,6 +66,111 @@ const Store = (() => {
     } catch {
       return false;
     }
+  }
+
+  function openPhotoDb() {
+    if (photoDbPromise) return photoDbPromise;
+    photoDbPromise = new Promise((resolve, reject) => {
+      if (!window.indexedDB) {
+        reject(new Error('IndexedDB unavailable'));
+        return;
+      }
+      const request = indexedDB.open(PHOTO_DB.NAME, PHOTO_DB.VERSION);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(PHOTO_DB.STORE)) {
+          db.createObjectStore(PHOTO_DB.STORE, { keyPath: 'id' });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error('Unable to open photo storage'));
+    });
+    return photoDbPromise;
+  }
+
+  function isQuotaError(error) {
+    if (!error) return false;
+    return error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED';
+  }
+
+  function dataUrlToBlob(dataUrl) {
+    const parts = dataUrl.split(',');
+    if (parts.length < 2) throw new Error('Invalid image data');
+    const mimeMatch = parts[0].match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    const binary = atob(parts[1]);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error || new Error('Unable to read image blob'));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  function withPhotoStore(mode, handler) {
+    return openPhotoDb().then((db) => new Promise((resolve, reject) => {
+      const tx = db.transaction(PHOTO_DB.STORE, mode);
+      const store = tx.objectStore(PHOTO_DB.STORE);
+      let settled = false;
+
+      function finish(fn, value) {
+        if (settled) return;
+        settled = true;
+        fn(value);
+      }
+
+      tx.oncomplete = () => finish(resolve, undefined);
+      tx.onerror = () => finish(reject, tx.error || new Error('Photo transaction failed'));
+      tx.onabort = () => finish(reject, tx.error || new Error('Photo transaction aborted'));
+
+      try {
+        const maybePromise = handler(store, tx, resolve, reject, finish);
+        if (maybePromise && typeof maybePromise.then === 'function') {
+          maybePromise.catch((error) => finish(reject, error));
+        }
+      } catch (error) {
+        finish(reject, error);
+      }
+    }));
+  }
+
+  async function migrateLegacyPhotos() {
+    if (get(KEYS.PHOTOS_MIGRATED)) return;
+    const legacyPhotos = get(KEYS.PHOTOS) || [];
+    if (!Array.isArray(legacyPhotos) || legacyPhotos.length === 0) {
+      set(KEYS.PHOTOS_MIGRATED, true);
+      localStorage.removeItem(KEYS.PHOTOS);
+      return;
+    }
+
+    for (const legacyPhoto of legacyPhotos) {
+      if (!legacyPhoto || !legacyPhoto.dataUrl) continue;
+      const record = {
+        id: legacyPhoto.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+        date: legacyPhoto.date || new Date().toISOString().split('T')[0],
+        note: legacyPhoto.note || '',
+        blob: dataUrlToBlob(legacyPhoto.dataUrl),
+      };
+      await withPhotoStore('readwrite', (store, tx, resolve, reject, finish) => {
+        const req = store.put(record);
+        req.onerror = () => finish(reject, req.error || new Error('Failed to migrate photo'));
+      });
+    }
+
+    localStorage.removeItem(KEYS.PHOTOS);
+    set(KEYS.PHOTOS_MIGRATED, true);
+  }
+
+  function ensurePhotoStorageReady() {
+    if (photoMigrationPromise) return photoMigrationPromise;
+    photoMigrationPromise = openPhotoDb().then(() => migrateLegacyPhotos());
+    return photoMigrationPromise;
   }
 
   // Profile
@@ -150,24 +265,83 @@ const Store = (() => {
   }
 
   // Progress photos: [{ id, date, note, dataUrl }]
-  function getPhotos() {
-    return get(KEYS.PHOTOS) || [];
+  async function getPhotos() {
+    await ensurePhotoStorageReady();
+    const records = await withPhotoStore('readonly', (store, tx, resolve, reject, finish) => {
+      const req = store.getAll();
+      req.onsuccess = () => finish(resolve, req.result || []);
+      req.onerror = () => finish(reject, req.error || new Error('Unable to read photos'));
+    });
+
+    const photos = await Promise.all(records.map(async (p) => ({
+      id: p.id,
+      date: p.date,
+      note: p.note || '',
+      dataUrl: p.blob ? await blobToDataUrl(p.blob) : '',
+    })));
+
+    return photos
+      .filter(p => p.dataUrl)
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
   }
-  function savePhotos(photos) {
-    return set(KEYS.PHOTOS, photos);
+
+  async function savePhotos(photos) {
+    await ensurePhotoStorageReady();
+    await withPhotoStore('readwrite', async (store, tx, resolve, reject, finish) => {
+      store.clear();
+      for (const photo of photos) {
+        if (!photo || !photo.dataUrl) continue;
+        const req = store.put({
+          id: photo.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          date: photo.date,
+          note: photo.note || '',
+          blob: dataUrlToBlob(photo.dataUrl),
+        });
+        req.onerror = () => finish(reject, req.error || new Error('Unable to save photos'));
+      }
+    });
+    return true;
   }
-  function addPhoto(entry) {
-    const photos = getPhotos();
-    entry.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-    photos.push(entry);
-    photos.sort((a, b) => new Date(a.date) - new Date(b.date));
-    savePhotos(photos);
-    return entry;
+
+  async function addPhoto(entry) {
+    await ensurePhotoStorageReady();
+    const photo = {
+      id: entry.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      date: entry.date,
+      note: entry.note || '',
+      blob: entry.blob || (entry.dataUrl ? dataUrlToBlob(entry.dataUrl) : null),
+    };
+    if (!photo.blob) throw new Error('Missing photo image data');
+
+    try {
+      await withPhotoStore('readwrite', (store, tx, resolve, reject, finish) => {
+        const req = store.put(photo);
+        req.onerror = () => finish(reject, req.error || new Error('Unable to save photo'));
+      });
+    } catch (error) {
+      if (isQuotaError(error)) {
+        const quotaError = new Error('Photo storage is full. Try a smaller image or remove old photos.');
+        quotaError.code = 'QUOTA_EXCEEDED';
+        throw quotaError;
+      }
+      throw error;
+    }
+
+    return {
+      id: photo.id,
+      date: photo.date,
+      note: photo.note,
+      dataUrl: await blobToDataUrl(photo.blob),
+    };
   }
-  function deletePhoto(id) {
-    const photos = getPhotos().filter(p => p.id !== id);
-    savePhotos(photos);
-    return photos;
+
+  async function deletePhoto(id) {
+    await ensurePhotoStorageReady();
+    await withPhotoStore('readwrite', (store, tx, resolve, reject, finish) => {
+      const req = store.delete(id);
+      req.onerror = () => finish(reject, req.error || new Error('Unable to delete photo'));
+    });
+    return getPhotos();
   }
 
   // Goals
@@ -576,7 +750,8 @@ const Store = (() => {
   }
 
   // Export data
-  function exportData() {
+  async function exportData() {
+    const photos = await getPhotos();
     return JSON.stringify({
       profile: getProfile(),
       weights: getWeights(),
@@ -584,13 +759,13 @@ const Store = (() => {
       goals: getGoals(),
       settings: getSettings(),
       victories: getVictories(),
-      photos: getPhotos(),
+      photos,
       exportDate: new Date().toISOString(),
     }, null, 2);
   }
 
-  function getBackupSizeInfo() {
-    const payload = exportData();
+  async function getBackupSizeInfo() {
+    const payload = await exportData();
     const utf8Bytes = new TextEncoder().encode(payload).length;
     const encodedLength = Math.ceil(utf8Bytes / 3) * 4;
     return {
@@ -631,7 +806,7 @@ const Store = (() => {
   }
 
   // Import data
-  function importData(jsonStr) {
+  async function importData(jsonStr) {
     const result = { success: false, warnings: 0 };
 
     function isPlainObject(value) {
@@ -840,11 +1015,11 @@ const Store = (() => {
       }
 
       if (data.photos === undefined) {
-        savePhotos([]);
+        await savePhotos([]);
       } else if (!Array.isArray(data.photos)) {
         result.warnings++;
       } else {
-        savePhotos(sanitizePhotos(data.photos));
+        await savePhotos(sanitizePhotos(data.photos));
       }
 
       result.success = true;
@@ -855,8 +1030,8 @@ const Store = (() => {
   }
 
   // Generate shareable backup link
-  function generateBackupLink() {
-    const data = exportData();
+  async function generateBackupLink() {
+    const data = await exportData();
     try {
       const encoded = btoa(unescape(encodeURIComponent(data)));
       return encoded;
@@ -896,7 +1071,7 @@ const Store = (() => {
   }
 
   // Import from backup link
-  function importFromBackupLink(encoded) {
+  async function importFromBackupLink(encoded) {
     const failure = { success: false, warnings: 0 };
     try {
       const json = decodeURIComponent(escape(atob(encoded)));
@@ -904,7 +1079,7 @@ const Store = (() => {
       if (parsed && parsed.type === 'metadata') {
         return { success: false, warnings: 0, metadataOnly: true, metadata: parsed };
       }
-      return importData(json);
+      return await importData(json);
     } catch {
       return failure;
     }
@@ -913,6 +1088,11 @@ const Store = (() => {
   // Clear all data
   function clearAll() {
     Object.values(KEYS).forEach(k => localStorage.removeItem(k));
+    if (window.indexedDB) {
+      indexedDB.deleteDatabase(PHOTO_DB.NAME);
+    }
+    photoDbPromise = null;
+    photoMigrationPromise = null;
   }
 
   return {
@@ -920,6 +1100,7 @@ const Store = (() => {
     getWeights, saveWeights, addWeight, updateWeight, deleteWeight,
     getJabs, saveJabs, addJab, updateJab, deleteJab,
     getVictories, saveVictories, addVictory, deleteVictory,
+    ensurePhotoStorageReady,
     getPhotos, savePhotos, addPhoto, deletePhoto,
     getGoals, saveGoals,
     getSettings, saveSettings,
