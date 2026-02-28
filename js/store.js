@@ -61,6 +61,9 @@ const Store = (() => {
   };
 
   const SAFE_BACKUP_LINK_CHARS = 12000;
+  const ENCRYPTED_BACKUP_TYPE = 'jabit-encrypted-backup';
+  const ENCRYPTED_BACKUP_VERSION = 1;
+  const ENCRYPTION_ITERATIONS = 250000;
 
   function parseLocalDate(value) {
     if (value instanceof Date) {
@@ -939,6 +942,91 @@ const Store = (() => {
     }, null, 2);
   }
 
+  function bytesToBase64(bytes) {
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.subarray(i, i + chunkSize);
+      binary += String.fromCharCode(...chunk);
+    }
+    return btoa(binary);
+  }
+
+  function base64ToBytes(base64) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  }
+
+  async function deriveBackupKey(passphrase, saltBytes) {
+    const encoder = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(passphrase),
+      'PBKDF2',
+      false,
+      ['deriveKey'],
+    );
+    return crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt: saltBytes,
+        iterations: ENCRYPTION_ITERATIONS,
+        hash: 'SHA-256',
+      },
+      keyMaterial,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt', 'decrypt'],
+    );
+  }
+
+  function isEncryptedBackupPayload(parsed) {
+    return !!(
+      parsed
+      && typeof parsed === 'object'
+      && parsed.type === ENCRYPTED_BACKUP_TYPE
+      && parsed.version === ENCRYPTED_BACKUP_VERSION
+    );
+  }
+
+  async function exportEncryptedBackup(passphrase) {
+    if (typeof passphrase !== 'string' || passphrase.trim().length < 8) {
+      throw new Error('invalid-passphrase');
+    }
+    if (!window.crypto || !window.crypto.subtle) {
+      throw new Error('crypto-not-supported');
+    }
+    const plainText = await exportData();
+    const encoder = new TextEncoder();
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const key = await deriveBackupKey(passphrase.trim(), salt);
+    const cipherBuffer = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      encoder.encode(plainText),
+    );
+    const payload = {
+      type: ENCRYPTED_BACKUP_TYPE,
+      version: ENCRYPTED_BACKUP_VERSION,
+      exportDate: new Date().toISOString(),
+      kdf: {
+        name: 'PBKDF2',
+        hash: 'SHA-256',
+        iterations: ENCRYPTION_ITERATIONS,
+      },
+      cipher: 'AES-GCM',
+      salt: bytesToBase64(salt),
+      iv: bytesToBase64(iv),
+      ciphertext: bytesToBase64(new Uint8Array(cipherBuffer)),
+    };
+    return JSON.stringify(payload, null, 2);
+  }
+
   async function getBackupSizeInfo() {
     const payload = await exportData();
     const utf8Bytes = new TextEncoder().encode(payload).length;
@@ -1202,6 +1290,43 @@ const Store = (() => {
     }
   }
 
+  async function importBackupData(backupPayload, passphrase) {
+    const failure = { success: false, warnings: 0 };
+    let parsed;
+    try {
+      parsed = JSON.parse(backupPayload);
+    } catch {
+      return failure;
+    }
+
+    if (!isEncryptedBackupPayload(parsed)) {
+      return importData(backupPayload);
+    }
+
+    if (!window.crypto || !window.crypto.subtle) {
+      return { ...failure, requiresPassphrase: true, error: 'crypto-not-supported' };
+    }
+    if (typeof passphrase !== 'string' || passphrase.trim() === '') {
+      return { ...failure, requiresPassphrase: true, error: 'passphrase-required' };
+    }
+
+    try {
+      const salt = base64ToBytes(parsed.salt);
+      const iv = base64ToBytes(parsed.iv);
+      const ciphertext = base64ToBytes(parsed.ciphertext);
+      const key = await deriveBackupKey(passphrase.trim(), salt);
+      const plainBuffer = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        ciphertext,
+      );
+      const plainText = new TextDecoder().decode(plainBuffer);
+      return await importData(plainText);
+    } catch {
+      return { ...failure, requiresPassphrase: true, error: 'invalid-passphrase' };
+    }
+  }
+
   // Generate shareable backup link
   async function generateBackupLink() {
     const data = await exportData();
@@ -1246,12 +1371,29 @@ const Store = (() => {
   // Import from backup link
   async function importFromBackupLink(encoded) {
     const failure = { success: false, warnings: 0 };
+    if (!encoded || encoded.length > SAFE_BACKUP_LINK_CHARS) {
+      return { ...failure, blocked: true, reason: 'oversized' };
+    }
     try {
       const json = decodeURIComponent(escape(atob(encoded)));
       const parsed = JSON.parse(json);
       if (parsed && parsed.type === 'metadata') {
         return { success: false, warnings: 0, metadataOnly: true, metadata: parsed };
       }
+
+      const hasSensitiveShape = parsed
+        && typeof parsed === 'object'
+        && (
+          Object.prototype.hasOwnProperty.call(parsed, 'profile')
+          || Object.prototype.hasOwnProperty.call(parsed, 'weights')
+          || Object.prototype.hasOwnProperty.call(parsed, 'jabs')
+          || Object.prototype.hasOwnProperty.call(parsed, 'photos')
+          || isEncryptedBackupPayload(parsed)
+        );
+      if (hasSensitiveShape || json.length > 2500) {
+        return { ...failure, blocked: true, reason: 'sensitive' };
+      }
+
       return await importData(json);
     } catch {
       return failure;
@@ -1283,6 +1425,7 @@ const Store = (() => {
     getPeriodSummary, calculateGoalDate, getDoseWeightCorrelation,
     convertWeight, convertAllWeights,
     exportData, exportCSV, importData,
+    exportEncryptedBackup, importBackupData,
     getBackupSizeInfo,
     generateBackupLink, generateMetadataBackupLink, importFromBackupLink,
     SAFE_BACKUP_LINK_CHARS,

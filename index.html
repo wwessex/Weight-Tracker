@@ -608,11 +608,12 @@
         <h3 class="settings-section-title">Data</h3>
         <div class="settings-card">
           <div class="data-buttons">
-            <button class="btn btn-outline btn-block" id="btn-export">Export Data (JSON)</button>
+            <p class="form-help" style="margin-top:10px;">Privacy tip: backup links are metadata-only and should not be used for full restore. Use <strong>Export Encrypted Backup</strong> for personal data, then share the file and passphrase separately.</p>
+            <button class="btn btn-outline btn-block" id="btn-export">Export Encrypted Backup (JSON)</button>
             <button class="btn btn-outline btn-block" id="btn-export-csv">Export Data (CSV)</button>
-            <button class="btn btn-outline btn-block" id="btn-import">Import Data</button>
+            <button class="btn btn-outline btn-block" id="btn-import">Import Backup File</button>
             <input type="file" id="import-file" accept=".json" style="display:none;" aria-hidden="true">
-            <button class="btn btn-outline btn-block" id="btn-copy-backup">Copy Backup Link</button>
+            <button class="btn btn-outline btn-block" id="btn-copy-backup">Copy Metadata Link</button>
             <button class="btn btn-outline btn-block" id="btn-paste-backup">Restore from Backup Link</button>
             <button class="btn btn-danger btn-block" id="btn-clear-data">Clear All Data</button>
           </div>
