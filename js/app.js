@@ -170,13 +170,36 @@ const App = (() => {
       theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
     document.documentElement.setAttribute('data-theme', theme);
-    // Update meta theme-color
+    // Update meta theme-color for Safari status bar
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) {
       const colors = { light: '#f8fafc', dark: '#0f172a', calm: '#f5f0eb' };
       meta.content = colors[theme] || '#f8fafc';
     }
+    // Update apple-mobile-web-app-status-bar-style for iOS Safari
+    const appleMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+    if (appleMeta) {
+      appleMeta.content = theme === 'dark' ? 'black' : 'default';
+    }
   }
+
+  // Listen for system theme changes (relevant when theme is set to 'auto')
+  (function initAutoThemeListener() {
+    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    function onSystemThemeChange() {
+      var settings = Store.getSettings();
+      if (settings.theme === 'auto') {
+        applyTheme();
+      }
+    }
+    // Safari supports addEventListener on MediaQueryList since Safari 14,
+    // but older versions only support the deprecated addListener
+    if (mq.addEventListener) {
+      mq.addEventListener('change', onSystemThemeChange);
+    } else if (mq.addListener) {
+      mq.addListener(onSystemThemeChange);
+    }
+  })();
 
   // ===== ANIMATION HELPERS =====
   function animateValue(el, end, duration, suffix) {
@@ -382,10 +405,41 @@ const App = (() => {
   }
 
   // ===== REMINDERS (Web Notifications API) =====
+  function canUseNativeNotifications() {
+    return 'Notification' in window && Notification.permission === 'granted';
+  }
+
+  function showReminderBanner(type, message) {
+    var container = document.getElementById('reminder-banners');
+    if (!container) return;
+    var icon = type === 'dose' ? '\uD83D\uDC89' : '\u2696\uFE0F';
+    var banner = document.createElement('div');
+    banner.className = 'reminder-banner ' + type;
+    banner.innerHTML = '<span class="reminder-banner-icon">' + icon + '</span>' +
+      '<span class="reminder-banner-text">' + message + '</span>' +
+      '<button class="reminder-banner-dismiss" aria-label="Dismiss">&times;</button>';
+    banner.querySelector('.reminder-banner-dismiss').addEventListener('click', function() {
+      banner.style.animation = 'toastOut 0.3s ease forwards';
+      banner.addEventListener('animationend', function() { banner.remove(); });
+    });
+    container.appendChild(banner);
+  }
+
+  function sendReminder(title, message, type) {
+    if (canUseNativeNotifications()) {
+      new Notification(title, { body: message, icon: 'icons/icon-192.png' });
+    } else {
+      showReminderBanner(type, message);
+    }
+  }
+
   function checkReminders() {
     const settings = Store.getSettings();
     if (!settings.doseReminderEnabled && !settings.weighInReminderEnabled) return;
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+    // Clear any existing banners
+    var container = document.getElementById('reminder-banners');
+    if (container) container.innerHTML = '';
 
     const stats = Store.getStats();
 
@@ -393,9 +447,9 @@ const App = (() => {
     if (settings.doseReminderEnabled && stats.nextJabDate) {
       const diff = Math.ceil((new Date(stats.nextJabDate) - new Date()) / (1000 * 60 * 60 * 24));
       if (diff === 0) {
-        new Notification('Jab It - Dose Reminder', { body: 'Your dose is due today!', icon: 'icons/icon-192.png' });
+        sendReminder('Jab It - Dose Reminder', 'Your dose is due today!', 'dose');
       } else if (diff < 0) {
-        new Notification('Jab It - Dose Overdue', { body: 'Your dose is ' + Math.abs(diff) + ' day(s) overdue.', icon: 'icons/icon-192.png' });
+        sendReminder('Jab It - Dose Overdue', 'Your dose is ' + Math.abs(diff) + ' day(s) overdue.', 'dose');
       }
     }
 
@@ -408,7 +462,7 @@ const App = (() => {
         const scheduleMap = { daily: 1, every3: 3, weekly: 7 };
         const threshold = scheduleMap[settings.weighInSchedule] || 7;
         if (daysSince >= threshold) {
-          new Notification('Jab It - Weigh-in Reminder', { body: "It's been " + daysSince + ' days since your last weigh-in.', icon: 'icons/icon-192.png' });
+          sendReminder('Jab It - Weigh-in Reminder', "It's been " + daysSince + ' days since your last weigh-in.', 'weighin');
         }
       }
     }
@@ -1796,21 +1850,26 @@ const App = (() => {
     // Test notification
     document.getElementById('btn-test-notification').addEventListener('click', () => {
       if (!('Notification' in window)) {
-        toast('Notifications not supported in this browser', 'error');
+        // Fallback: show in-app banner (Safari iOS, older browsers)
+        showReminderBanner('dose', 'This is a test reminder. In-app banners will appear on the Summary page when reminders are due.');
+        toast('In-app reminders will be used (browser notifications unavailable)', 'success');
         return;
       }
       if (Notification.permission === 'granted') {
         new Notification('Jab It - Test', { body: 'Notifications are working!', icon: 'icons/icon-192.png' });
         toast('Test notification sent!', 'success');
       } else if (Notification.permission === 'denied') {
-        toast('Notifications blocked. Check browser settings.', 'error');
+        // Still show in-app banner as fallback
+        showReminderBanner('dose', 'This is a test reminder. In-app banners will appear on the Summary page when reminders are due.');
+        toast('Browser notifications blocked. In-app reminders will be used instead.', 'error');
       } else {
         Notification.requestPermission().then(perm => {
           if (perm === 'granted') {
             new Notification('Jab It - Test', { body: 'Notifications are working!', icon: 'icons/icon-192.png' });
             toast('Notifications enabled!', 'success');
           } else {
-            toast('Notification permission denied.', 'error');
+            showReminderBanner('dose', 'This is a test reminder. In-app banners will appear on the Summary page when reminders are due.');
+            toast('Using in-app reminders instead.', 'success');
           }
         });
       }
