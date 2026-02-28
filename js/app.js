@@ -157,6 +157,12 @@ const App = (() => {
   }
 
   function navigateTo(page) {
+    // Clear countdown timer when leaving summary page
+    if (countdownInterval) {
+      clearInterval(countdownInterval);
+      countdownInterval = null;
+    }
+
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.nav-tab').forEach(l => {
       l.classList.remove('active');
@@ -269,39 +275,9 @@ const App = (() => {
     return parseFloat(val).toFixed(1);
   }
 
-  function parseLocalDate(value) {
-    if (value instanceof Date) {
-      if (Number.isNaN(value.getTime())) return null;
-      return new Date(value.getFullYear(), value.getMonth(), value.getDate());
-    }
-    if (typeof value === 'string') {
-      const trimmed = value.trim();
-      const dateOnlyMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-      if (dateOnlyMatch) {
-        const year = parseInt(dateOnlyMatch[1], 10);
-        const monthIndex = parseInt(dateOnlyMatch[2], 10) - 1;
-        const day = parseInt(dateOnlyMatch[3], 10);
-        const parsed = new Date(year, monthIndex, day);
-        if (parsed.getFullYear() === year && parsed.getMonth() === monthIndex && parsed.getDate() === day) {
-          return parsed;
-        }
-        return null;
-      }
-      const parsed = new Date(trimmed);
-      if (Number.isNaN(parsed.getTime())) return null;
-      return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
-    }
-    return null;
-  }
-
-  function formatLocalDate(value) {
-    const date = parseLocalDate(value);
-    if (!date) return null;
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }
+  // Reuse Store's date parsing utilities (single source of truth)
+  const parseLocalDate = Store.parseLocalDate;
+  const formatLocalDate = Store.formatLocalDate;
 
   function toLocalDayNumber(value) {
     const date = parseLocalDate(value);
@@ -831,6 +807,9 @@ const App = (() => {
       projCard.style.display = 'none';
     }
 
+    // Period summary card
+    renderPeriodSummary(stats);
+
     // Mini sparkline
     renderSparkline();
 
@@ -839,6 +818,46 @@ const App = (() => {
 
     // Weight trend chart
     renderWeightSummaryChart();
+  }
+
+  function renderPeriodSummary(stats) {
+    const card = document.getElementById('period-summary-card');
+    const period = Store.getPeriodSummary();
+    const unit = stats.unit;
+
+    const hasData = period.dosesThisWeek > 0 || period.dosesThisMonth > 0
+      || period.weighInsThisWeek > 0 || period.weighInsThisMonth > 0;
+
+    if (!hasData) {
+      card.style.display = 'none';
+      return;
+    }
+
+    card.style.display = '';
+
+    function formatChange(val) {
+      if (val === null || val === undefined) return { text: '--', cls: '' };
+      const sign = val > 0 ? '+' : '';
+      const cls = val < 0 ? 'loss' : val > 0 ? 'gain' : '';
+      return { text: sign + val.toFixed(1) + ' ' + unit, cls };
+    }
+
+    const weekWeight = formatChange(stats.weightChange7d);
+    const monthWeight = formatChange(stats.weightChange30d);
+
+    const psWeekWeight = document.getElementById('ps-week-weight');
+    psWeekWeight.textContent = weekWeight.text;
+    psWeekWeight.className = 'period-summary-value' + (weekWeight.cls ? ' ' + weekWeight.cls : '');
+
+    document.getElementById('ps-week-doses').textContent = period.dosesThisWeek;
+    document.getElementById('ps-week-weighins').textContent = period.weighInsThisWeek;
+
+    const psMonthWeight = document.getElementById('ps-month-weight');
+    psMonthWeight.textContent = monthWeight.text;
+    psMonthWeight.className = 'period-summary-value' + (monthWeight.cls ? ' ' + monthWeight.cls : '');
+
+    document.getElementById('ps-month-doses').textContent = period.dosesThisMonth;
+    document.getElementById('ps-month-weighins').textContent = period.weighInsThisMonth;
   }
 
   function renderSparkline() {
@@ -1011,40 +1030,92 @@ const App = (() => {
     cutoff.setDate(cutoff.getDate() - 30);
     const filtered = normalizedWeights.filter(w => w._localDate >= cutoff);
 
-    weightSummaryChart = destroyChart(weightSummaryChart);
     const ctx = document.getElementById('chart-weight-summary').getContext('2d');
 
     const data = filtered.length > 0 ? filtered : normalizedWeights;
     if (data.length === 0) {
+      weightSummaryChart = destroyChart(weightSummaryChart);
       ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
       return;
     }
 
     const gradient = createChartGradient(ctx, 'rgba(99,102,241,0.3)', 'rgba(99,102,241,0.01)');
+
+    // Build datasets: weight line + optional moving average
+    const newLabels = data.map(w => w.date);
+    const weightData = data.map(w => parseFloat(w.weight));
+    const movingAvg = Store.getMovingAverage(28);
+    const dataDateSet = new Set(newLabels);
+    const filteredAvg = movingAvg.filter(ma => dataDateSet.has(ma.date));
+    const showLegend = filteredAvg.length >= 2;
+
+    // Update existing chart in place if possible
+    if (weightSummaryChart && weightSummaryChart.canvas) {
+      weightSummaryChart.data.labels = newLabels;
+      weightSummaryChart.data.datasets[0].data = weightData;
+      weightSummaryChart.data.datasets[0].borderColor = colors.primary;
+      weightSummaryChart.data.datasets[0].backgroundColor = gradient;
+      weightSummaryChart.data.datasets[0].pointBackgroundColor = colors.primary;
+      weightSummaryChart.data.datasets[0].pointRadius = data.length > 20 ? 0 : 3;
+
+      if (showLegend) {
+        if (weightSummaryChart.data.datasets.length < 2) {
+          weightSummaryChart.data.datasets.push({
+            label: '4-Week Avg', data: [], borderColor: colors.success,
+            borderWidth: 2, borderDash: [4, 4], pointRadius: 0, fill: false, tension: 0.4,
+          });
+        }
+        weightSummaryChart.data.datasets[1].data = filteredAvg.map(ma => ma.avg);
+        weightSummaryChart.data.datasets[1].borderColor = colors.success;
+      } else {
+        weightSummaryChart.data.datasets.length = 1;
+      }
+
+      weightSummaryChart.options.plugins.legend.display = showLegend;
+      weightSummaryChart.options.scales.x.ticks.color = colors.textMuted;
+      weightSummaryChart.options.scales.y.grid.color = colors.grid;
+      weightSummaryChart.options.scales.y.ticks.color = colors.textMuted;
+      weightSummaryChart.update('active');
+      return;
+    }
+
+    // Create new chart
+    const datasets = [{
+      label: 'Weight',
+      data: weightData,
+      borderColor: colors.primary,
+      backgroundColor: gradient,
+      borderWidth: 2,
+      tension: 0.4,
+      fill: true,
+      pointRadius: data.length > 20 ? 0 : 3,
+      pointHoverRadius: 5,
+      pointBackgroundColor: colors.primary,
+    }];
+
+    if (showLegend) {
+      datasets.push({
+        label: '4-Week Avg',
+        data: filteredAvg.map(ma => ma.avg),
+        borderColor: colors.success,
+        borderWidth: 2,
+        borderDash: [4, 4],
+        pointRadius: 0,
+        fill: false,
+        tension: 0.4,
+      });
+    }
+
     weightSummaryChart = new Chart(ctx, {
       type: 'line',
-      data: {
-        labels: data.map(w => w.date),
-        datasets: [{
-          label: 'Weight',
-          data: data.map(w => parseFloat(w.weight)),
-          borderColor: colors.primary,
-          backgroundColor: gradient,
-          borderWidth: 2,
-          tension: 0.4,
-          fill: true,
-          pointRadius: data.length > 20 ? 0 : 3,
-          pointHoverRadius: 5,
-          pointBackgroundColor: colors.primary,
-        }],
-      },
+      data: { labels: newLabels, datasets },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         animation: { duration: 800, easing: 'easeOutQuart' },
         interaction: { intersect: false, mode: 'index' },
         plugins: {
-          legend: { display: false },
+          legend: { display: showLegend, labels: { color: colors.textMuted, font: { size: 10 } } },
           tooltip: {
             backgroundColor: 'rgba(15,23,42,0.9)',
             titleColor: '#f1f5f9',
@@ -1055,7 +1126,7 @@ const App = (() => {
             padding: 12,
             displayColors: false,
             callbacks: {
-              label: (c) => c.parsed.y.toFixed(1) + ' ' + Store.getSettings().weightUnit,
+              label: (c) => c.dataset.label + ': ' + c.parsed.y.toFixed(1) + ' ' + Store.getSettings().weightUnit,
             },
           },
         },
@@ -1181,6 +1252,7 @@ const App = (() => {
       document.getElementById('site-rotation-card').style.display = 'none';
       document.getElementById('side-effect-trends').style.display = 'none';
       document.getElementById('escalation-section').style.display = 'none';
+      document.getElementById('correlation-card').style.display = 'none';
       document.getElementById('dose-count').textContent = '0';
       return;
     }
@@ -1213,6 +1285,7 @@ const App = (() => {
     renderSiteRotation();
     renderSideEffectTrends();
     renderDoseEscalation();
+    renderDoseWeightCorrelation();
   }
 
   function renderDoseChart(jabs) {
@@ -1357,6 +1430,38 @@ const App = (() => {
     `).join('');
   }
 
+  function renderDoseWeightCorrelation() {
+    const card = document.getElementById('correlation-card');
+    const content = document.getElementById('correlation-content');
+    const data = Store.getDoseWeightCorrelation();
+    const unit = Store.getSettings().weightUnit;
+
+    if (!data || data.length === 0) {
+      card.style.display = 'none';
+      return;
+    }
+
+    card.style.display = '';
+    content.innerHTML = data.map(d => {
+      const improved = d.improvement > 0;
+      const icon = improved ? '&#x2191;' : d.improvement < 0 ? '&#x2193;' : '&#x2194;';
+      const cls = improved ? 'positive' : d.improvement < 0 ? 'negative' : 'neutral';
+      return `
+        <div class="correlation-item">
+          <div class="correlation-dose-change">
+            ${d.fromDose} ${d.unit} &rarr; ${d.toDose} ${d.unit}
+            <span class="correlation-date">(${formatDateShort(d.date)})</span>
+          </div>
+          <div class="correlation-rates">
+            <span>Before: ${d.rateBefore.toFixed(1)} ${unit}/wk</span>
+            <span class="correlation-arrow ${cls}">${icon}</span>
+            <span>After: ${d.rateAfter.toFixed(1)} ${unit}/wk</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
   function removeDose(id) {
     if (!confirm('Delete this dose entry?')) return;
     Store.deleteJab(id);
@@ -1427,6 +1532,18 @@ const App = (() => {
     // Photo compare selects
     document.getElementById('photo-compare-left').addEventListener('change', () => updatePhotoCompare());
     document.getElementById('photo-compare-right').addEventListener('change', () => updatePhotoCompare());
+
+    // What-If calculator toggle
+    document.getElementById('whatif-toggle').addEventListener('click', () => {
+      const body = document.getElementById('whatif-body');
+      const chevron = document.getElementById('whatif-chevron');
+      const isOpen = body.style.display !== 'none';
+      body.style.display = isOpen ? 'none' : '';
+      chevron.innerHTML = isOpen ? '&#x25BC;' : '&#x25B2;';
+    });
+
+    // What-If calculator live input
+    document.getElementById('whatif-rate').addEventListener('input', updateWhatIf);
 
     updateWeightUnitLabels();
 
@@ -1547,9 +1664,42 @@ const App = (() => {
     // NSVs
     renderNSVList();
 
+    // What-If calculator visibility
+    const whatifCard = document.getElementById('whatif-card');
+    const goals = Store.getGoals();
+    if (goals.targetWeight && weights.length >= 2) {
+      whatifCard.style.display = '';
+      document.getElementById('whatif-unit').textContent = unit;
+      updateWhatIf();
+    } else {
+      whatifCard.style.display = 'none';
+    }
+
     // Share button visibility
     const shareBtn = document.getElementById('btn-share-card');
     shareBtn.style.display = weights.length >= 2 ? '' : 'none';
+  }
+
+  function updateWhatIf() {
+    const rate = parseFloat(document.getElementById('whatif-rate').value);
+    const resultEl = document.getElementById('whatif-result');
+    if (!rate || rate <= 0) {
+      resultEl.textContent = '';
+      return;
+    }
+    const projection = Store.calculateGoalDate(rate);
+    if (!projection) {
+      resultEl.textContent = 'Set a goal weight in Settings first.';
+      return;
+    }
+    if (projection.weeks === 0) {
+      resultEl.innerHTML = "You've already reached your goal!";
+      return;
+    }
+    const unit = Store.getSettings().weightUnit;
+    resultEl.innerHTML =
+      "You'll reach your goal in about <strong>" + projection.weeks + ' weeks</strong> (' +
+      formatDate(projection.date) + ').';
   }
 
   function renderWeightFullChart(weights) {

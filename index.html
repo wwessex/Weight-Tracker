@@ -198,6 +198,44 @@
         </div>
       </div>
 
+      <!-- Period Summary Card -->
+      <div class="period-summary-card" id="period-summary-card" style="display:none;">
+        <h3 class="section-title">Period Summary</h3>
+        <div class="period-summary-grid">
+          <div class="period-summary-col">
+            <div class="period-summary-label">This Week</div>
+            <div class="period-summary-stat">
+              <span class="period-summary-value" id="ps-week-weight">--</span>
+              <span class="period-summary-sub">weight change</span>
+            </div>
+            <div class="period-summary-stat">
+              <span class="period-summary-value" id="ps-week-doses">--</span>
+              <span class="period-summary-sub">doses</span>
+            </div>
+            <div class="period-summary-stat">
+              <span class="period-summary-value" id="ps-week-weighins">--</span>
+              <span class="period-summary-sub">weigh-ins</span>
+            </div>
+          </div>
+          <div class="period-summary-divider"></div>
+          <div class="period-summary-col">
+            <div class="period-summary-label">This Month</div>
+            <div class="period-summary-stat">
+              <span class="period-summary-value" id="ps-month-weight">--</span>
+              <span class="period-summary-sub">weight change</span>
+            </div>
+            <div class="period-summary-stat">
+              <span class="period-summary-value" id="ps-month-doses">--</span>
+              <span class="period-summary-sub">doses</span>
+            </div>
+            <div class="period-summary-stat">
+              <span class="period-summary-value" id="ps-month-weighins">--</span>
+              <span class="period-summary-sub">weigh-ins</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Mini Sparkline -->
       <div class="sparkline-card" id="sparkline-card" style="display:none;">
         <div class="sparkline-header">
@@ -289,6 +327,14 @@
         <div id="escalation-list" class="escalation-timeline"></div>
       </div>
 
+      <!-- Dose-Weight Correlation -->
+      <div class="correlation-card" id="correlation-card" style="display:none;">
+        <div class="section-header">
+          <h3 class="section-title">Dose vs. Weight Loss</h3>
+        </div>
+        <div id="correlation-content"></div>
+      </div>
+
       <!-- Dose List -->
       <div class="section-header" style="margin-top:16px;">
         <h3 class="section-title">All Doses</h3>
@@ -333,6 +379,24 @@
       <div class="rate-of-loss-card" id="rate-of-loss-card" style="display:none;">
         <span class="rate-of-loss-icon" aria-hidden="true">&#x1F4C9;</span>
         <span id="rate-of-loss-text"></span>
+      </div>
+
+      <!-- What-If Goal Calculator -->
+      <div class="whatif-card" id="whatif-card" style="display:none;">
+        <div class="whatif-header" id="whatif-toggle">
+          <h3 class="section-title">What-If Calculator</h3>
+          <span class="whatif-chevron" id="whatif-chevron">&#x25BC;</span>
+        </div>
+        <div class="whatif-body" id="whatif-body" style="display:none;">
+          <div class="form-group">
+            <label for="whatif-rate">If I lose per week:</label>
+            <div class="form-row" style="align-items:center;gap:8px;">
+              <input type="number" id="whatif-rate" step="0.1" min="0.1" max="10" placeholder="0.5" style="flex:1;">
+              <span class="whatif-unit" id="whatif-unit">kg</span>
+            </div>
+          </div>
+          <div class="whatif-result" id="whatif-result"></div>
+        </div>
       </div>
 
       <!-- Progress Stats -->

@@ -20,6 +20,17 @@ const Store = (() => {
   let photoDbPromise = null;
   let photoMigrationPromise = null;
 
+  // Stats cache — invalidated on any data mutation
+  let _cacheVersion = 0;
+  let _statsCache = null;
+  let _statsCacheVersion = -1;
+  let _movingAvgCache = {};
+  let _movingAvgCacheVersion = -1;
+
+  function _invalidateCache() {
+    _cacheVersion++;
+  }
+
   const defaults = {
     profile: {
       name: '',
@@ -237,6 +248,7 @@ const Store = (() => {
     return get(KEYS.PROFILE) || { ...defaults.profile };
   }
   function saveProfile(profile) {
+    _invalidateCache();
     return set(KEYS.PROFILE, profile);
   }
 
@@ -245,6 +257,7 @@ const Store = (() => {
     return get(KEYS.WEIGHTS) || [];
   }
   function saveWeights(weights) {
+    _invalidateCache();
     return set(KEYS.WEIGHTS, weights);
   }
   function addWeight(entry) {
@@ -276,6 +289,7 @@ const Store = (() => {
     return get(KEYS.JABS) || [];
   }
   function saveJabs(jabs) {
+    _invalidateCache();
     return set(KEYS.JABS, jabs);
   }
   function addJab(entry) {
@@ -408,6 +422,7 @@ const Store = (() => {
     return get(KEYS.GOALS) || { ...defaults.goals };
   }
   function saveGoals(goals) {
+    _invalidateCache();
     return set(KEYS.GOALS, goals);
   }
 
@@ -461,6 +476,7 @@ const Store = (() => {
 
   // Stats helpers
   function getStats() {
+    if (_statsCache && _statsCacheVersion === _cacheVersion) return _statsCache;
     const weights = withNormalizedLocalDates(getWeights(), 'weight entry');
     const profile = getProfile();
     const goals = getGoals();
@@ -468,7 +484,7 @@ const Store = (() => {
     const settings = getSettings();
 
     if (weights.length === 0) {
-      return {
+      const emptyResult = {
         currentWeight: profile.startWeight || null,
         startWeight: profile.startWeight || null,
         totalLost: 0,
@@ -488,6 +504,9 @@ const Store = (() => {
         progressPercent: 0,
         unit: settings.weightUnit,
       };
+      _statsCache = emptyResult;
+      _statsCacheVersion = _cacheVersion;
+      return emptyResult;
     }
 
     const current = weights[weights.length - 1];
@@ -572,7 +591,7 @@ const Store = (() => {
       }
     }
 
-    return {
+    const result = {
       currentWeight: currentW,
       startWeight: start,
       totalLost,
@@ -593,6 +612,9 @@ const Store = (() => {
       unit: settings.weightUnit,
       frequency: profile.frequency || 'weekly',
     };
+    _statsCache = result;
+    _statsCacheVersion = _cacheVersion;
+    return result;
   }
 
   // Enhanced streak data
@@ -747,6 +769,9 @@ const Store = (() => {
   // Moving average calculation (windowDays default 28 = 4 weeks)
   function getMovingAverage(windowDays) {
     windowDays = windowDays || 28;
+    if (_movingAvgCacheVersion === _cacheVersion && _movingAvgCache[windowDays]) {
+      return _movingAvgCache[windowDays];
+    }
     const weights = withNormalizedLocalDates(getWeights(), 'moving-average weight entry');
     if (weights.length < 2) return [];
     const result = [];
@@ -761,7 +786,86 @@ const Store = (() => {
       const avg = windowWeights.reduce((sum, w) => sum + parseFloat(w.weight), 0) / windowWeights.length;
       result.push({ date: weights[i].date, avg: Math.round(avg * 10) / 10 });
     }
+    if (_movingAvgCacheVersion !== _cacheVersion) {
+      _movingAvgCache = {};
+      _movingAvgCacheVersion = _cacheVersion;
+    }
+    _movingAvgCache[windowDays] = result;
     return result;
+  }
+
+  // Period summary for weekly/monthly cards
+  function getPeriodSummary() {
+    const weights = withNormalizedLocalDates(getWeights(), 'period-summary weight');
+    const jabs = withNormalizedLocalDates(getJabs(), 'period-summary dose');
+    const now = parseLocalDate(new Date());
+    const d7 = new Date(now); d7.setDate(d7.getDate() - 7);
+    const d30 = new Date(now); d30.setDate(d30.getDate() - 30);
+
+    return {
+      dosesThisWeek: jabs.filter(j => j._localDate >= d7).length,
+      dosesThisMonth: jabs.filter(j => j._localDate >= d30).length,
+      weighInsThisWeek: weights.filter(w => w._localDate >= d7).length,
+      weighInsThisMonth: weights.filter(w => w._localDate >= d30).length,
+    };
+  }
+
+  // What-if goal calculator
+  function calculateGoalDate(weeklyRate) {
+    const stats = getStats();
+    if (!stats.targetWeight || !weeklyRate || weeklyRate <= 0) return null;
+    if (stats.currentWeight <= stats.targetWeight) return { date: formatLocalDate(new Date()), weeks: 0 };
+    const weightToGo = stats.currentWeight - stats.targetWeight;
+    const weeksToGo = weightToGo / weeklyRate;
+    const projected = new Date();
+    projected.setDate(projected.getDate() + Math.round(weeksToGo * 7));
+    return { date: formatLocalDate(projected), weeks: Math.round(weeksToGo * 10) / 10 };
+  }
+
+  // Dose-weight correlation: compare weight loss rates before/after dose changes
+  function getDoseWeightCorrelation() {
+    const escalations = getDoseEscalations();
+    if (escalations.length === 0) return [];
+    const weights = withNormalizedLocalDates(getWeights(), 'correlation weight');
+    if (weights.length < 4) return [];
+    const windowDays = 28;
+    const results = [];
+
+    escalations.forEach(esc => {
+      const escDate = parseLocalDate(esc.date);
+      if (!escDate) return;
+      const beforeStart = new Date(escDate); beforeStart.setDate(beforeStart.getDate() - windowDays);
+      const afterEnd = new Date(escDate); afterEnd.setDate(afterEnd.getDate() + windowDays);
+
+      const before = weights.filter(w => w._localDate >= beforeStart && w._localDate < escDate);
+      const after = weights.filter(w => w._localDate > escDate && w._localDate <= afterEnd);
+
+      if (before.length < 2 || after.length < 2) return;
+
+      const bFirst = parseFloat(before[0].weight);
+      const bLast = parseFloat(before[before.length - 1].weight);
+      const bDays = (before[before.length - 1]._localDate - before[0]._localDate) / (1000 * 60 * 60 * 24);
+      const rateBefore = bDays > 0 ? Math.round(((bFirst - bLast) / bDays) * 7 * 10) / 10 : 0;
+
+      const aFirst = parseFloat(after[0].weight);
+      const aLast = parseFloat(after[after.length - 1].weight);
+      const aDays = (after[after.length - 1]._localDate - after[0]._localDate) / (1000 * 60 * 60 * 24);
+      const rateAfter = aDays > 0 ? Math.round(((aFirst - aLast) / aDays) * 7 * 10) / 10 : 0;
+
+      results.push({
+        date: esc.date,
+        fromDose: esc.fromDose,
+        toDose: esc.toDose,
+        medication: esc.medication,
+        unit: esc.unit,
+        direction: esc.direction,
+        rateBefore,
+        rateAfter,
+        improvement: Math.round((rateAfter - rateBefore) * 10) / 10,
+      });
+    });
+
+    return results;
   }
 
   // Rate of loss for a period
@@ -1168,6 +1272,7 @@ const Store = (() => {
     getStats, getStreakData, getMilestones, getProjectedGoalDate,
     getSideEffectTrends, getDoseEscalations,
     getMovingAverage, getRateOfLoss, getNextRecommendedSite,
+    getPeriodSummary, calculateGoalDate, getDoseWeightCorrelation,
     convertWeight, convertAllWeights,
     exportData, exportCSV, importData,
     getBackupSizeInfo,
