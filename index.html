@@ -6,6 +6,19 @@
   <title>Jab It: Weight Loss Tracker</title>
   <meta name="description" content="Track your weight loss journey and medication doses">
   <meta name="theme-color" content="#6366f1">
+  <script>
+    // Apply saved theme immediately to prevent flash of wrong theme
+    try {
+      var s = JSON.parse(localStorage.getItem('shotsy_settings'));
+      if (s && s.theme) {
+        var t = s.theme;
+        if (t === 'auto') t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+        var m = document.querySelector('meta[name="theme-color"]');
+        if (m) m.content = ({light:'#f8fafc',dark:'#0f172a',calm:'#f5f0eb'})[t] || '#f8fafc';
+      }
+    } catch(e) {}
+  </script>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">

@@ -9,6 +9,7 @@ const App = (() => {
 
   // ===== INIT =====
   function init() {
+    applyTheme();
     window.addEventListener('beforeunload', teardownReminderChecks);
     const profile = Store.getProfile();
     if (!profile.name) {
