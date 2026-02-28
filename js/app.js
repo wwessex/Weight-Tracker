@@ -77,7 +77,7 @@ const App = (() => {
         height: document.getElementById('ob-height').value,
         heightUnit: document.getElementById('ob-height-unit').value,
         startWeight: document.getElementById('ob-weight').value,
-        startDate: new Date().toISOString().split('T')[0],
+        startDate: formatLocalDate(new Date()),
         medication: document.getElementById('ob-medication').value,
         age: '',
       };
@@ -269,25 +269,90 @@ const App = (() => {
     return parseFloat(val).toFixed(1);
   }
 
+  function parseLocalDate(value) {
+    if (value instanceof Date) {
+      if (Number.isNaN(value.getTime())) return null;
+      return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      const dateOnlyMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (dateOnlyMatch) {
+        const year = parseInt(dateOnlyMatch[1], 10);
+        const monthIndex = parseInt(dateOnlyMatch[2], 10) - 1;
+        const day = parseInt(dateOnlyMatch[3], 10);
+        const parsed = new Date(year, monthIndex, day);
+        if (parsed.getFullYear() === year && parsed.getMonth() === monthIndex && parsed.getDate() === day) {
+          return parsed;
+        }
+        return null;
+      }
+      const parsed = new Date(trimmed);
+      if (Number.isNaN(parsed.getTime())) return null;
+      return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+    }
+    return null;
+  }
+
+  function formatLocalDate(value) {
+    const date = parseLocalDate(value);
+    if (!date) return null;
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  function toLocalDayNumber(value) {
+    const date = parseLocalDate(value);
+    if (!date) return null;
+    return Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / (1000 * 60 * 60 * 24));
+  }
+
+  function dayDiff(fromValue, toValue) {
+    const fromDay = toLocalDayNumber(fromValue);
+    const toDay = toLocalDayNumber(toValue);
+    if (fromDay === null || toDay === null) return null;
+    return toDay - fromDay;
+  }
+
+  function normalizeDateEntries(entries, context) {
+    return entries.map((entry) => {
+      const localDate = parseLocalDate(entry.date);
+      if (!localDate) {
+        console.warn(`[App] Skipping ${context} with invalid date:`, entry && entry.date);
+        return null;
+      }
+      return {
+        ...entry,
+        _localDate: localDate,
+      };
+    }).filter(Boolean);
+  }
+
   function formatDate(dateStr) {
-    const d = new Date(dateStr);
+    const d = parseLocalDate(dateStr);
+    if (!d) return '--';
     return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   }
 
   function formatDateShort(dateStr) {
-    const d = new Date(dateStr);
+    const d = parseLocalDate(dateStr);
+    if (!d) return '--';
     return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
   }
 
   function daysAgo(dateStr) {
-    const diff = Math.floor((new Date() - new Date(dateStr)) / (1000 * 60 * 60 * 24));
+    const diff = dayDiff(dateStr, new Date());
+    if (diff === null) return '--';
     if (diff === 0) return 'Today';
     if (diff === 1) return 'Yesterday';
     return diff + 'd ago';
   }
 
   function daysUntil(dateStr) {
-    const diff = Math.ceil((new Date(dateStr) - new Date()) / (1000 * 60 * 60 * 24));
+    const diff = dayDiff(new Date(), dateStr);
+    if (diff === null) return '--';
     if (diff <= 0) return 'Overdue';
     if (diff === 1) return 'Tomorrow';
     return diff + ' days';
@@ -480,13 +545,13 @@ const App = (() => {
 
     if (!settings.doseReminderEnabled && !settings.weighInReminderEnabled) return;
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = formatLocalDate(new Date());
 
     const stats = Store.getStats();
 
     // Check dose reminder
     if (settings.doseReminderEnabled && stats.nextJabDate) {
-      const diff = Math.ceil((new Date(stats.nextJabDate) - new Date()) / (1000 * 60 * 60 * 24));
+      const diff = dayDiff(new Date(), stats.nextJabDate);
       if (diff === 0) {
         const dedupKey = today + '|due';
         if (shouldSendReminder('dose', dedupKey)) {
@@ -504,14 +569,17 @@ const App = (() => {
     if (settings.weighInReminderEnabled) {
       const weights = Store.getWeights();
       if (weights.length > 0) {
-        const lastWeighDate = new Date(weights[weights.length - 1].date);
-        const daysSince = Math.floor((new Date() - lastWeighDate) / (1000 * 60 * 60 * 24));
-        const scheduleMap = { daily: 1, every3: 3, weekly: 7 };
-        const threshold = scheduleMap[settings.weighInSchedule] || 7;
-        if (daysSince >= threshold) {
-          const dedupKey = today + '|due|' + daysSince;
-          if (shouldSendReminder('weighin', dedupKey)) {
-            sendReminder('Jab It - Weigh-in Reminder', "It's been " + daysSince + ' days since your last weigh-in.', 'weighin');
+        const daysSince = dayDiff(weights[weights.length - 1].date, new Date());
+        if (daysSince === null) {
+          console.warn('[App] Skipping weigh-in reminder due to invalid last weight date:', weights[weights.length - 1].date);
+        } else {
+          const scheduleMap = { daily: 1, every3: 3, weekly: 7 };
+          const threshold = scheduleMap[settings.weighInSchedule] || 7;
+          if (daysSince >= threshold) {
+            const dedupKey = today + '|due|' + daysSince;
+            if (shouldSendReminder('weighin', dedupKey)) {
+              sendReminder('Jab It - Weigh-in Reminder', "It's been " + daysSince + ' days since your last weigh-in.', 'weighin');
+            }
           }
         }
       }
@@ -663,7 +731,7 @@ const App = (() => {
     document.getElementById('btn-log-overdue').addEventListener('click', () => openDoseModal());
     document.getElementById('btn-log-missed').addEventListener('click', () => {
       const stats = Store.getStats();
-      document.getElementById('missed-dose-date').value = stats.nextJabDate || new Date().toISOString().split('T')[0];
+      document.getElementById('missed-dose-date').value = stats.nextJabDate || formatLocalDate(new Date());
       document.getElementById('missed-dose-reason').value = '';
       openModal(document.getElementById('missed-dose-modal'));
     });
@@ -704,7 +772,7 @@ const App = (() => {
     // Missed dose banner
     const banner = document.getElementById('missed-dose-banner');
     if (stats.nextJabDate) {
-      const diff = Math.ceil((new Date(stats.nextJabDate) - new Date()) / (1000 * 60 * 60 * 24));
+      const diff = dayDiff(new Date(), stats.nextJabDate);
       if (diff < 0) {
         banner.style.display = '';
         document.getElementById('missed-dose-text').textContent = 'Dose overdue by ' + Math.abs(diff) + ' day(s)!';
@@ -779,9 +847,10 @@ const App = (() => {
     const canvas = document.getElementById('sparkline-canvas');
     const changeEl = document.getElementById('sparkline-change');
 
-    const cutoff = new Date();
+    const normalizedWeights = normalizeDateEntries(weights, 'weight trend entry');
+    const cutoff = parseLocalDate(new Date());
     cutoff.setDate(cutoff.getDate() - 30);
-    const filtered = weights.filter(w => new Date(w.date) >= cutoff);
+    const filtered = normalizedWeights.filter(w => w._localDate >= cutoff);
 
     if (filtered.length < 2) {
       card.style.display = 'none';
@@ -870,9 +939,15 @@ const App = (() => {
 
     function updateCountdown() {
       const now = new Date();
-      const target = new Date(stats.nextJabDate);
+      const targetDate = parseLocalDate(stats.nextJabDate);
+      if (!targetDate) {
+        console.warn('[App] Invalid next jab date for countdown:', stats.nextJabDate);
+        return;
+      }
+      const target = new Date(targetDate);
+      target.setHours(23, 59, 59, 999);
       const diffMs = target - now;
-      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      const diffDays = dayDiff(new Date(), stats.nextJabDate);
       const diffHours = Math.max(0, Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)));
 
       if (diffMs <= 0) {
@@ -897,7 +972,7 @@ const App = (() => {
     updateCountdown();
     countdownInterval = setInterval(updateCountdown, 60000);
 
-    const diff = Math.ceil((new Date(stats.nextJabDate) - new Date()) / (1000 * 60 * 60 * 24));
+    const diff = dayDiff(new Date(), stats.nextJabDate);
     const elapsed = cycleDays - Math.max(0, diff);
     const progress = Math.max(0, Math.min(1, elapsed / cycleDays));
 
@@ -931,14 +1006,15 @@ const App = (() => {
     const colors = getChartColors();
 
     // Show last 30 days on summary
-    const cutoff = new Date();
+    const normalizedWeights = normalizeDateEntries(weights, 'weight trend entry');
+    const cutoff = parseLocalDate(new Date());
     cutoff.setDate(cutoff.getDate() - 30);
-    const filtered = weights.filter(w => new Date(w.date) >= cutoff);
+    const filtered = normalizedWeights.filter(w => w._localDate >= cutoff);
 
     weightSummaryChart = destroyChart(weightSummaryChart);
     const ctx = document.getElementById('chart-weight-summary').getContext('2d');
 
-    const data = filtered.length > 0 ? filtered : weights;
+    const data = filtered.length > 0 ? filtered : normalizedWeights;
     if (data.length === 0) {
       ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
       return;
@@ -1071,7 +1147,7 @@ const App = (() => {
     } else {
       document.getElementById('dose-edit-id').value = '';
       document.getElementById('dose-modal-title').textContent = 'Log Dose';
-      document.getElementById('dose-date').value = new Date().toISOString().split('T')[0];
+      document.getElementById('dose-date').value = formatLocalDate(new Date());
       document.getElementById('dose-time').value = new Date().toTimeString().slice(0, 5);
       document.getElementById('dose-medication').value = profile.medication || 'semaglutide';
       document.getElementById('dose-amount').value = '';
@@ -1091,11 +1167,11 @@ const App = (() => {
     const list = document.getElementById('dose-list');
     const chartContainer = document.getElementById('dose-chart-container');
 
-    let filtered = jabs;
+    let filtered = normalizeDateEntries(jabs, 'dose chart/list entry');
     if (currentDoseRange !== 'all') {
-      const cutoff = new Date();
+      const cutoff = parseLocalDate(new Date());
       cutoff.setDate(cutoff.getDate() - currentDoseRange);
-      filtered = jabs.filter(j => new Date(j.date) >= cutoff);
+      filtered = filtered.filter(j => j._localDate >= cutoff);
     }
 
     if (jabs.length === 0) {
@@ -1332,14 +1408,14 @@ const App = (() => {
 
     // Photo & NSV buttons
     document.getElementById('btn-add-photo').addEventListener('click', () => {
-      document.getElementById('photo-date').value = new Date().toISOString().split('T')[0];
+      document.getElementById('photo-date').value = formatLocalDate(new Date());
       document.getElementById('photo-note').value = '';
       document.getElementById('photo-file').value = '';
       openModal(document.getElementById('photo-modal'));
     });
 
     document.getElementById('btn-add-nsv').addEventListener('click', () => {
-      document.getElementById('nsv-date').value = new Date().toISOString().split('T')[0];
+      document.getElementById('nsv-date').value = formatLocalDate(new Date());
       document.getElementById('nsv-text').value = '';
       document.getElementById('nsv-category').value = 'fitness';
       openModal(document.getElementById('nsv-modal'));
@@ -1379,7 +1455,7 @@ const App = (() => {
     } else {
       document.getElementById('weight-edit-id').value = '';
       document.getElementById('weight-modal-title').textContent = 'Log Weight';
-      document.getElementById('weight-date').value = new Date().toISOString().split('T')[0];
+      document.getElementById('weight-date').value = formatLocalDate(new Date());
       document.getElementById('weight-value').value = '';
       document.getElementById('weight-note').value = '';
     }
@@ -1451,11 +1527,12 @@ const App = (() => {
     }
 
     // Filter weights
-    let filtered = weights;
+    const normalizedWeights = normalizeDateEntries(weights, 'progress weight entry');
+    let filtered = normalizedWeights;
     if (currentProgressRange !== 'all') {
-      const cutoff = new Date();
+      const cutoff = parseLocalDate(new Date());
       cutoff.setDate(cutoff.getDate() - currentProgressRange);
-      filtered = weights.filter(w => new Date(w.date) >= cutoff);
+      filtered = normalizedWeights.filter(w => w._localDate >= cutoff);
     }
 
     // Chart

@@ -27,7 +27,7 @@ const Store = (() => {
       height: '',
       heightUnit: 'cm',
       startWeight: '',
-      startDate: new Date().toISOString().split('T')[0],
+      startDate: formatLocalDate(new Date()),
       medication: 'semaglutide',
     },
     settings: {
@@ -49,6 +49,65 @@ const Store = (() => {
   };
 
   const SAFE_BACKUP_LINK_CHARS = 12000;
+
+  function parseLocalDate(value) {
+    if (value instanceof Date) {
+      if (Number.isNaN(value.getTime())) return null;
+      return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      const dateOnlyMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (dateOnlyMatch) {
+        const year = parseInt(dateOnlyMatch[1], 10);
+        const monthIndex = parseInt(dateOnlyMatch[2], 10) - 1;
+        const day = parseInt(dateOnlyMatch[3], 10);
+        const parsed = new Date(year, monthIndex, day);
+        if (parsed.getFullYear() === year && parsed.getMonth() === monthIndex && parsed.getDate() === day) {
+          return parsed;
+        }
+        return null;
+      }
+      const parsed = new Date(trimmed);
+      if (Number.isNaN(parsed.getTime())) return null;
+      return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+    }
+    return null;
+  }
+
+  function formatLocalDate(value) {
+    const date = parseLocalDate(value);
+    if (!date) return null;
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  function warnInvalidDate(context, dateValue) {
+    console.warn(`[Store] Skipping ${context} with invalid date:`, dateValue);
+  }
+
+  function sortByLocalDate(a, b) {
+    const aDate = parseLocalDate(a.date);
+    const bDate = parseLocalDate(b.date);
+    if (!aDate || !bDate) return 0;
+    return aDate - bDate;
+  }
+
+  function withNormalizedLocalDates(records, context) {
+    return records.map((record) => {
+      const parsedDate = parseLocalDate(record.date);
+      if (!parsedDate) {
+        warnInvalidDate(context, record && record.date);
+        return null;
+      }
+      return {
+        ...record,
+        _localDate: parsedDate,
+      };
+    }).filter(Boolean).sort((a, b) => a._localDate - b._localDate);
+  }
 
   function get(key) {
     try {
@@ -153,7 +212,7 @@ const Store = (() => {
       if (!legacyPhoto || !legacyPhoto.dataUrl) continue;
       const record = {
         id: legacyPhoto.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
-        date: legacyPhoto.date || new Date().toISOString().split('T')[0],
+        date: legacyPhoto.date || formatLocalDate(new Date()),
         note: legacyPhoto.note || '',
         blob: dataUrlToBlob(legacyPhoto.dataUrl),
       };
@@ -192,7 +251,7 @@ const Store = (() => {
     const weights = getWeights();
     entry.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     weights.push(entry);
-    weights.sort((a, b) => new Date(a.date) - new Date(b.date));
+    weights.sort(sortByLocalDate);
     saveWeights(weights);
     return entry;
   }
@@ -201,7 +260,7 @@ const Store = (() => {
     const idx = weights.findIndex(w => w.id === id);
     if (idx !== -1) {
       weights[idx] = { ...weights[idx], ...updates };
-      weights.sort((a, b) => new Date(a.date) - new Date(b.date));
+      weights.sort(sortByLocalDate);
       saveWeights(weights);
     }
     return weights;
@@ -223,7 +282,7 @@ const Store = (() => {
     const jabs = getJabs();
     entry.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     jabs.push(entry);
-    jabs.sort((a, b) => new Date(a.date) - new Date(b.date));
+    jabs.sort(sortByLocalDate);
     saveJabs(jabs);
     return entry;
   }
@@ -232,7 +291,7 @@ const Store = (() => {
     const idx = jabs.findIndex(j => j.id === id);
     if (idx !== -1) {
       jabs[idx] = { ...jabs[idx], ...updates };
-      jabs.sort((a, b) => new Date(a.date) - new Date(b.date));
+      jabs.sort(sortByLocalDate);
       saveJabs(jabs);
     }
     return jabs;
@@ -254,7 +313,7 @@ const Store = (() => {
     const victories = getVictories();
     entry.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     victories.push(entry);
-    victories.sort((a, b) => new Date(a.date) - new Date(b.date));
+    victories.sort(sortByLocalDate);
     saveVictories(victories);
     return entry;
   }
@@ -282,7 +341,7 @@ const Store = (() => {
 
     return photos
       .filter(p => p.dataUrl)
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
+      .sort(sortByLocalDate);
   }
 
   async function savePhotos(photos) {
@@ -402,10 +461,10 @@ const Store = (() => {
 
   // Stats helpers
   function getStats() {
-    const weights = getWeights();
+    const weights = withNormalizedLocalDates(getWeights(), 'weight entry');
     const profile = getProfile();
     const goals = getGoals();
-    const jabs = getJabs();
+    const jabs = withNormalizedLocalDates(getJabs(), 'dose entry');
     const settings = getSettings();
 
     if (weights.length === 0) {
@@ -453,20 +512,20 @@ const Store = (() => {
     }
 
     // Changes over time
-    const now = new Date();
+    const now = parseLocalDate(new Date());
     const d7 = new Date(now);
     d7.setDate(d7.getDate() - 7);
     const d30 = new Date(now);
     d30.setDate(d30.getDate() - 30);
 
-    const weight7dAgo = weights.filter(w => new Date(w.date) <= d7).pop();
-    const weight30dAgo = weights.filter(w => new Date(w.date) <= d30).pop();
+    const weight7dAgo = weights.filter(w => w._localDate <= d7).pop();
+    const weight30dAgo = weights.filter(w => w._localDate <= d30).pop();
 
     const weightChange7d = weight7dAgo ? currentW - parseFloat(weight7dAgo.weight) : 0;
     const weightChange30d = weight30dAgo ? currentW - parseFloat(weight30dAgo.weight) : 0;
 
     // Average weekly loss
-    const daysDiff = (new Date(current.date) - new Date(weights[0].date)) / (1000 * 60 * 60 * 24);
+    const daysDiff = (current._localDate - weights[0]._localDate) / (1000 * 60 * 60 * 24);
     const weeks = daysDiff / 7;
     const avgWeeklyLoss = weeks > 0 ? totalLost / weeks : 0;
 
@@ -477,7 +536,7 @@ const Store = (() => {
     for (let i = 0; i < 52; i++) {
       const weekStart = new Date(checkDate - weekMs);
       const hasEntry = weights.some(w => {
-        const d = new Date(w.date);
+        const d = w._localDate;
         return d >= weekStart && d <= checkDate;
       });
       if (hasEntry) {
@@ -487,8 +546,8 @@ const Store = (() => {
     }
 
     // Days on plan
-    const startDate = profile.startDate || weights[0].date;
-    const daysOnPlan = Math.floor((now - new Date(startDate)) / (1000 * 60 * 60 * 24));
+    const startDate = parseLocalDate(profile.startDate || weights[0].date);
+    const daysOnPlan = startDate ? Math.floor((now - startDate) / (1000 * 60 * 60 * 24)) : 0;
 
     // Progress toward goal
     const targetWeight = goals.targetWeight ? parseFloat(goals.targetWeight) : null;
@@ -503,10 +562,14 @@ const Store = (() => {
       const freq = profile.frequency || 'weekly';
       const freqDays = { daily: 1, weekly: 7, biweekly: 14, monthly: 30 };
       const days = freqDays[freq] || 7;
-      const lastJabD = new Date(lastJab.date);
-      nextJabDate = new Date(lastJabD);
-      nextJabDate.setDate(nextJabDate.getDate() + days);
-      nextJabDate = nextJabDate.toISOString().split('T')[0];
+      const lastJabD = parseLocalDate(lastJab.date);
+      if (!lastJabD) {
+        warnInvalidDate('last dose entry', lastJab.date);
+      } else {
+        nextJabDate = new Date(lastJabD);
+        nextJabDate.setDate(nextJabDate.getDate() + days);
+        nextJabDate = formatLocalDate(nextJabDate);
+      }
     }
 
     return {
@@ -534,8 +597,8 @@ const Store = (() => {
 
   // Enhanced streak data
   function getStreakData() {
-    const weights = getWeights();
-    const jabs = getJabs();
+    const weights = withNormalizedLocalDates(getWeights(), 'weight streak entry');
+    const jabs = withNormalizedLocalDates(getJabs(), 'dose streak entry');
     const settings = getSettings();
     const profile = getProfile();
     const freq = profile.frequency || 'weekly';
@@ -547,7 +610,7 @@ const Store = (() => {
     for (let i = 0; i < 52; i++) {
       const weekStart = new Date(checkDate - weekMs);
       const hasEntry = weights.some(w => {
-        const d = new Date(w.date);
+        const d = w._localDate;
         return d >= weekStart && d <= checkDate;
       });
       if (hasEntry) {
@@ -565,7 +628,7 @@ const Store = (() => {
     for (let i = 0; i < 52; i++) {
       const periodStart = new Date(checkDate - periodMs);
       const hasJab = jabs.some(j => {
-        const d = new Date(j.date);
+        const d = j._localDate;
         return d >= periodStart && d <= checkDate;
       });
       if (hasJab) {
@@ -636,7 +699,7 @@ const Store = (() => {
     const weeksToGo = stats.weightToGo / stats.avgWeeklyLoss;
     const projected = new Date();
     projected.setDate(projected.getDate() + Math.round(weeksToGo * 7));
-    return projected.toISOString().split('T')[0];
+    return formatLocalDate(projected);
   }
 
   // Side effect trends
@@ -684,15 +747,15 @@ const Store = (() => {
   // Moving average calculation (windowDays default 28 = 4 weeks)
   function getMovingAverage(windowDays) {
     windowDays = windowDays || 28;
-    const weights = getWeights();
+    const weights = withNormalizedLocalDates(getWeights(), 'moving-average weight entry');
     if (weights.length < 2) return [];
     const result = [];
     for (let i = 0; i < weights.length; i++) {
-      const endDate = new Date(weights[i].date);
+      const endDate = weights[i]._localDate;
       const startDate = new Date(endDate);
       startDate.setDate(startDate.getDate() - windowDays);
       const windowWeights = weights.filter(w => {
-        const d = new Date(w.date);
+        const d = w._localDate;
         return d >= startDate && d <= endDate;
       });
       const avg = windowWeights.reduce((sum, w) => sum + parseFloat(w.weight), 0) / windowWeights.length;
@@ -703,16 +766,16 @@ const Store = (() => {
 
   // Rate of loss for a period
   function getRateOfLoss(periodDays) {
-    const weights = getWeights();
+    const weights = withNormalizedLocalDates(getWeights(), 'rate-of-loss weight entry');
     if (weights.length < 2) return null;
     const now = new Date();
     const cutoff = new Date(now);
     cutoff.setDate(cutoff.getDate() - (periodDays || 30));
-    const periodWeights = weights.filter(w => new Date(w.date) >= cutoff);
+    const periodWeights = weights.filter(w => w._localDate >= cutoff);
     if (periodWeights.length < 2) return null;
     const first = parseFloat(periodWeights[0].weight);
     const last = parseFloat(periodWeights[periodWeights.length - 1].weight);
-    const days = (new Date(periodWeights[periodWeights.length - 1].date) - new Date(periodWeights[0].date)) / (1000 * 60 * 60 * 24);
+    const days = (periodWeights[periodWeights.length - 1]._localDate - periodWeights[0]._localDate) / (1000 * 60 * 60 * 24);
     if (days === 0) return null;
     const weeklyRate = ((first - last) / days) * 7;
     return Math.round(weeklyRate * 10) / 10;
@@ -787,7 +850,7 @@ const Store = (() => {
     const allEntries = [];
     weights.forEach(w => allEntries.push({ type: 'weight', date: w.date, data: w }));
     jabs.forEach(j => allEntries.push({ type: 'dose', date: j.date, data: j }));
-    allEntries.sort((a, b) => new Date(a.date) - new Date(b.date));
+    allEntries.sort(sortByLocalDate);
 
     allEntries.forEach(e => {
       if (e.type === 'weight') {
@@ -824,9 +887,7 @@ const Store = (() => {
 
     function toDateString(value) {
       if (typeof value !== 'string' && !(value instanceof Date)) return null;
-      const d = new Date(value);
-      if (Number.isNaN(d.getTime())) return null;
-      return d.toISOString().split('T')[0];
+      return formatLocalDate(value);
     }
 
     function toStringOrEmpty(value) {
@@ -852,7 +913,7 @@ const Store = (() => {
           weight,
           note: toStringOrEmpty(entry.note),
         };
-      }).filter(Boolean).sort((a, b) => new Date(a.date) - new Date(b.date));
+      }).filter(Boolean).sort(sortByLocalDate);
     }
 
     function sanitizeJabs(jabs) {
@@ -881,7 +942,7 @@ const Store = (() => {
           sideEffects,
           notes: toStringOrEmpty(entry.notes),
         };
-      }).filter(Boolean).sort((a, b) => new Date(a.date) - new Date(b.date));
+      }).filter(Boolean).sort(sortByLocalDate);
     }
 
     function sanitizeVictories(victories) {
@@ -902,7 +963,7 @@ const Store = (() => {
           text,
           category: toStringOrEmpty(entry.category),
         };
-      }).filter(Boolean).sort((a, b) => new Date(a.date) - new Date(b.date));
+      }).filter(Boolean).sort(sortByLocalDate);
     }
 
     function sanitizePhotos(photos) {
@@ -923,7 +984,7 @@ const Store = (() => {
           note: toStringOrEmpty(entry.note),
           dataUrl,
         };
-      }).filter(Boolean).sort((a, b) => new Date(a.date) - new Date(b.date));
+      }).filter(Boolean).sort(sortByLocalDate);
     }
 
     try {
@@ -1112,6 +1173,7 @@ const Store = (() => {
     getBackupSizeInfo,
     generateBackupLink, generateMetadataBackupLink, importFromBackupLink,
     SAFE_BACKUP_LINK_CHARS,
+    parseLocalDate, formatLocalDate,
     clearAll,
   };
 })();
