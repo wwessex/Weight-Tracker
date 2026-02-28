@@ -32,6 +32,9 @@ const App = (() => {
     initProgressPage();
     initSettingsPage();
     initModals();
+    Store.ensurePhotoStorageReady().catch(() => {
+      toast('Photo storage is unavailable in this browser.', 'error');
+    });
     handleHashChange();
     window.addEventListener('hashchange', handleHashChange);
     // Show tour if first time
@@ -541,20 +544,45 @@ const App = (() => {
     document.getElementById('photo-modal-close').addEventListener('click', () => closeModal(photoModal));
     document.getElementById('photo-form-cancel').addEventListener('click', () => closeModal(photoModal));
     photoModal.addEventListener('click', (e) => { if (e.target === photoModal) closeModal(photoModal); });
-    photoForm.addEventListener('submit', (e) => {
+    photoForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const file = document.getElementById('photo-file').files[0];
       if (!file) return;
-      resizeImage(file, 300, 0.5, (dataUrl) => {
-        Store.addPhoto({
-          date: document.getElementById('photo-date').value,
-          note: document.getElementById('photo-note').value,
-          dataUrl: dataUrl,
-        });
-        closeModal(photoModal);
-        toast('Photo saved!', 'success');
-        refreshProgress();
-      });
+      const date = document.getElementById('photo-date').value;
+      const note = document.getElementById('photo-note').value;
+      const attempts = [
+        { maxWidth: 1200, quality: 0.82 },
+        { maxWidth: 900, quality: 0.7 },
+        { maxWidth: 700, quality: 0.55 },
+        { maxWidth: 500, quality: 0.45 },
+      ];
+
+      try {
+        let saved = false;
+        let quotaError = null;
+        for (let i = 0; i < attempts.length && !saved; i++) {
+          const candidate = await resizeImage(file, attempts[i].maxWidth, attempts[i].quality);
+          try {
+            await Store.addPhoto({ date, note, blob: candidate.blob });
+            saved = true;
+            closeModal(photoModal);
+            toast(i > 0 ? 'Photo saved (compressed to fit storage).' : 'Photo saved!', 'success');
+            await refreshProgress();
+          } catch (error) {
+            if (error && error.code === 'QUOTA_EXCEEDED') {
+              quotaError = error;
+            } else {
+              throw error;
+            }
+          }
+        }
+
+        if (!saved && quotaError) {
+          toast('Storage full: unable to save photo. Delete older photos or use a smaller image.', 'error');
+        }
+      } catch {
+        toast('Failed to save photo. Please try again.', 'error');
+      }
     });
 
     // Photo Viewer
@@ -594,26 +622,36 @@ const App = (() => {
   }
 
   // Image resize helper
-  function resizeImage(file, maxWidth, quality, callback) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let w = img.width;
-        let h = img.height;
-        if (w > maxWidth) {
-          h = (h * maxWidth) / w;
-          w = maxWidth;
-        }
-        canvas.width = w;
-        canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        callback(canvas.toDataURL('image/jpeg', quality));
+  function resizeImage(file, maxWidth, quality) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let w = img.width;
+          let h = img.height;
+          if (w > maxWidth) {
+            h = (h * maxWidth) / w;
+            w = maxWidth;
+          }
+          canvas.width = w;
+          canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          canvas.toBlob((blob) => {
+            if (!blob) {
+              reject(new Error('Unable to process image'));
+              return;
+            }
+            resolve({ blob, dataUrl: canvas.toDataURL('image/jpeg', quality) });
+          }, 'image/jpeg', quality);
+        };
+        img.onerror = () => reject(new Error('Invalid image file'));
+        img.src = e.target.result;
       };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
+      reader.onerror = () => reject(new Error('Unable to read image file'));
+      reader.readAsDataURL(file);
+    });
   }
 
   // ===== SUMMARY PAGE =====
@@ -1252,7 +1290,7 @@ const App = (() => {
   }
 
   // ===== PROGRESS PAGE =====
-  function initProgressPage() {
+  async function initProgressPage() {
     const weightModal = document.getElementById('weight-modal');
     const weightForm = document.getElementById('weight-form');
 
@@ -1311,14 +1349,14 @@ const App = (() => {
     document.getElementById('btn-share-card').addEventListener('click', generateShareCard);
 
     // Photo compare selects
-    document.getElementById('photo-compare-left').addEventListener('change', updatePhotoCompare);
-    document.getElementById('photo-compare-right').addEventListener('change', updatePhotoCompare);
+    document.getElementById('photo-compare-left').addEventListener('change', () => updatePhotoCompare());
+    document.getElementById('photo-compare-right').addEventListener('change', () => updatePhotoCompare());
 
     updateWeightUnitLabels();
 
     const linkExportButton = document.getElementById('btn-export-link') || document.getElementById('btn-copy-backup');
     if (linkExportButton) {
-      const size = Store.getBackupSizeInfo();
+      const size = await Store.getBackupSizeInfo();
       linkExportButton.disabled = size.exceedsSafeLink;
       linkExportButton.title = size.exceedsSafeLink
         ? 'Backup too large for a safe URL. Export and share a backup file instead.'
@@ -1353,7 +1391,7 @@ const App = (() => {
     document.querySelectorAll('.weight-unit-label').forEach(el => el.textContent = unit);
   }
 
-  function refreshProgress() {
+  async function refreshProgress() {
     const weights = Store.getWeights();
     const stats = Store.getStats();
     const unit = Store.getSettings().weightUnit;
@@ -1427,7 +1465,7 @@ const App = (() => {
     renderWeightEntries(filtered);
 
     // Photos
-    renderPhotoGallery();
+    await renderPhotoGallery();
 
     // NSVs
     renderNSVList();
@@ -1617,8 +1655,8 @@ const App = (() => {
     staggerListItems('#weight-entries-list .weight-item');
   }
 
-  function renderPhotoGallery() {
-    const photos = Store.getPhotos();
+  async function renderPhotoGallery() {
+    const photos = await Store.getPhotos();
     const gallery = document.getElementById('photo-gallery');
     const empty = document.getElementById('photo-empty');
 
@@ -1638,8 +1676,8 @@ const App = (() => {
     `).join('');
   }
 
-  function viewPhotos() {
-    const photos = Store.getPhotos();
+  async function viewPhotos() {
+    const photos = await Store.getPhotos();
     if (photos.length === 0) return;
 
     const leftSel = document.getElementById('photo-compare-left');
@@ -1658,12 +1696,12 @@ const App = (() => {
       rightSel.value = photos[photos.length - 1].id;
     }
 
-    updatePhotoCompare();
+    await updatePhotoCompare();
     openModal(document.getElementById('photo-viewer-modal'));
   }
 
-  function updatePhotoCompare() {
-    const photos = Store.getPhotos();
+  async function updatePhotoCompare() {
+    const photos = await Store.getPhotos();
     const leftId = document.getElementById('photo-compare-left').value;
     const rightId = document.getElementById('photo-compare-right').value;
     const leftFrame = document.getElementById('photo-frame-left');
@@ -1676,11 +1714,11 @@ const App = (() => {
     rightFrame.innerHTML = rightPhoto ? '<img src="' + rightPhoto.dataUrl + '" alt="Right comparison photo">' : 'No photo';
   }
 
-  function removePhoto(id) {
+  async function removePhoto(id) {
     if (!confirm('Delete this photo?')) return;
-    Store.deletePhoto(id);
+    await Store.deletePhoto(id);
     toast('Photo deleted');
-    renderPhotoGallery();
+    await renderPhotoGallery();
   }
 
   function renderNSVList() {
@@ -1819,7 +1857,7 @@ const App = (() => {
     }
 
     async function exportBackupFile(preferCompressed, largePayloadFallback) {
-      const data = Store.exportData();
+      const data = await Store.exportData();
       const dateStamp = new Date().toISOString().split('T')[0];
       try {
         if (preferCompressed) {
@@ -1851,17 +1889,17 @@ const App = (() => {
       });
     }
 
-    function updateBackupLinkState() {
+    async function updateBackupLinkState() {
       if (!linkExportButton) return;
-      const size = Store.getBackupSizeInfo();
+      const size = await Store.getBackupSizeInfo();
       linkExportButton.disabled = size.exceedsSafeLink;
       linkExportButton.title = size.exceedsSafeLink
         ? 'Backup too large for a safe URL. Export and share a backup file instead.'
         : 'Create a full restore backup link';
     }
 
-    function importFromEncodedPayload(encoded, fromRestoreParam) {
-      const importResult = Store.importFromBackupLink(encoded);
+    async function importFromEncodedPayload(encoded, fromRestoreParam) {
+      const importResult = await Store.importFromBackupLink(encoded);
       if (importResult.success) {
         if (importResult.warnings > 0) {
           toast('Data restored' + (fromRestoreParam ? ' from link' : '') + ' with ' + importResult.warnings + ' skipped invalid row(s).', 'success');
@@ -1923,7 +1961,7 @@ const App = (() => {
 
       try {
         const content = await readBackupFile(file);
-        const importResult = Store.importData(content);
+        const importResult = await Store.importData(content);
         if (importResult.success) {
           if (importResult.warnings > 0) {
             toast('Data imported with ' + importResult.warnings + ' skipped invalid row(s).', 'success');
@@ -1932,7 +1970,7 @@ const App = (() => {
           }
           bootApp();
           navigateTo('summary');
-          updateBackupLinkState();
+          await updateBackupLinkState();
         } else {
           toast('Import failed. Invalid file.', 'error');
         }
@@ -1949,8 +1987,8 @@ const App = (() => {
 
     // Export/copy backup link
     if (linkExportButton) {
-      linkExportButton.addEventListener('click', () => {
-        const size = Store.getBackupSizeInfo();
+      linkExportButton.addEventListener('click', async () => {
+        const size = await Store.getBackupSizeInfo();
 
         if (size.exceedsSafeLink) {
           exportBackupFile(true, true);
@@ -1962,7 +2000,7 @@ const App = (() => {
           return;
         }
 
-        const encoded = Store.generateBackupLink();
+        const encoded = await Store.generateBackupLink();
         if (!encoded) {
           toast('Failed to generate backup link.', 'error');
           return;
