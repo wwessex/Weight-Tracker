@@ -15,11 +15,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create site zip
-        run: zip -r site.zip index.html manifest.json sw.js css/ js/ icons/
+      - name: Prepare site artifact directory
+        run: |
+          mkdir -p site-artifact
+          cp -r index.html manifest.json sw.js css js icons site-artifact/
 
-      - name: Upload zip as artifact
+      - name: Upload site files as artifact
         uses: actions/upload-artifact@v4
         with:
           name: weight-tracker-site
-          path: site.zip
+          path: site-artifact/
