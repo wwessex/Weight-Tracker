@@ -108,6 +108,40 @@ const App = (() => {
     document.documentElement.setAttribute('data-theme', theme);
   }
 
+  // ===== ANIMATION HELPERS =====
+  function animateValue(el, end, duration, suffix) {
+    if (!el || end === null || end === undefined || isNaN(end)) return;
+    duration = duration || 600;
+    suffix = suffix || '';
+    const start = 0;
+    const range = parseFloat(end) - start;
+    const isInt = Number.isInteger(parseFloat(end));
+    const startTime = performance.now();
+    function update(now) {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const current = start + range * eased;
+      el.textContent = (isInt ? Math.round(current) : current.toFixed(1)) + suffix;
+      if (progress < 1) requestAnimationFrame(update);
+    }
+    requestAnimationFrame(update);
+  }
+
+  function staggerListItems(selector) {
+    const items = document.querySelectorAll(selector);
+    items.forEach((item, i) => {
+      item.style.animationDelay = (Math.min(i, 15) * 0.04) + 's';
+    });
+  }
+
+  function createChartGradient(ctx, colorTop, colorBottom) {
+    const gradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
+    gradient.addColorStop(0, colorTop);
+    gradient.addColorStop(1, colorBottom);
+    return gradient;
+  }
+
   // ===== HELPERS =====
   function formatWeight(val) {
     const unit = Store.getSettings().weightUnit;
@@ -150,7 +184,10 @@ const App = (() => {
     t.className = 'toast ' + type;
     t.textContent = msg;
     container.appendChild(t);
-    setTimeout(() => t.remove(), 3500);
+    setTimeout(() => {
+      t.classList.add('dismissing');
+      t.addEventListener('animationend', () => t.remove());
+    }, 3000);
   }
 
   function getBmiLabel(bmi) {
@@ -215,15 +252,39 @@ const App = (() => {
     const stats = Store.getStats();
     const unit = Store.getSettings().weightUnit;
 
-    // Stats grid
-    document.getElementById('sum-total-doses').textContent = stats.totalJabs;
-    document.getElementById('sum-weight-lost').textContent = stats.totalLost ? formatWeightShort(stats.totalLost) + ' ' + unit : '--';
-    document.getElementById('sum-current').textContent = stats.currentWeight ? formatWeightShort(stats.currentWeight) + ' ' + unit : '--';
-    document.getElementById('sum-to-goal').textContent = stats.weightToGo !== null ? formatWeightShort(stats.weightToGo) + ' ' + unit : '--';
-    document.getElementById('sum-pct-lost').textContent = stats.progressPercent > 0 ? stats.progressPercent.toFixed(0) + '%' : '--';
+    // Stats grid with animated counters
+    if (stats.totalJabs > 0) {
+      animateValue(document.getElementById('sum-total-doses'), stats.totalJabs, 600, '');
+    } else {
+      document.getElementById('sum-total-doses').textContent = '0';
+    }
+
+    if (stats.totalLost) {
+      animateValue(document.getElementById('sum-weight-lost'), stats.totalLost, 600, ' ' + unit);
+    } else {
+      document.getElementById('sum-weight-lost').textContent = '--';
+    }
+
+    if (stats.currentWeight) {
+      animateValue(document.getElementById('sum-current'), stats.currentWeight, 600, ' ' + unit);
+    } else {
+      document.getElementById('sum-current').textContent = '--';
+    }
+
+    if (stats.weightToGo !== null) {
+      animateValue(document.getElementById('sum-to-goal'), stats.weightToGo, 600, ' ' + unit);
+    } else {
+      document.getElementById('sum-to-goal').textContent = '--';
+    }
+
+    if (stats.progressPercent > 0) {
+      animateValue(document.getElementById('sum-pct-lost'), stats.progressPercent, 600, '%');
+    } else {
+      document.getElementById('sum-pct-lost').textContent = '--';
+    }
 
     if (stats.bmi) {
-      document.getElementById('sum-bmi').textContent = stats.bmi.toFixed(1);
+      animateValue(document.getElementById('sum-bmi'), stats.bmi, 600, '');
     } else {
       document.getElementById('sum-bmi').textContent = '--';
     }
@@ -298,6 +359,11 @@ const App = (() => {
         plugins: { legend: { display: false }, tooltip: { enabled: false } },
         rotation: -90,
         circumference: 360,
+        animation: {
+          animateRotate: true,
+          duration: 1000,
+          easing: 'easeOutQuart',
+        },
       },
     });
   }
@@ -320,6 +386,7 @@ const App = (() => {
       return;
     }
 
+    const gradient = createChartGradient(ctx, 'rgba(99,102,241,0.3)', 'rgba(99,102,241,0.01)');
     weightSummaryChart = new Chart(ctx, {
       type: 'line',
       data: {
@@ -328,7 +395,7 @@ const App = (() => {
           label: 'Weight',
           data: data.map(w => parseFloat(w.weight)),
           borderColor: colors.primary,
-          backgroundColor: colors.primaryLight,
+          backgroundColor: gradient,
           borderWidth: 2,
           tension: 0.4,
           fill: true,
@@ -340,15 +407,19 @@ const App = (() => {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: { duration: 800, easing: 'easeOutQuart' },
         interaction: { intersect: false, mode: 'index' },
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: colors.text,
-            titleColor: colors.text === '#0f172a' ? '#fff' : '#0f172a',
-            bodyColor: colors.text === '#0f172a' ? '#fff' : '#0f172a',
-            cornerRadius: 8,
-            padding: 8,
+            backgroundColor: 'rgba(15,23,42,0.9)',
+            titleColor: '#f1f5f9',
+            bodyColor: '#e2e8f0',
+            borderColor: 'rgba(99,102,241,0.3)',
+            borderWidth: 1,
+            cornerRadius: 10,
+            padding: 12,
+            displayColors: false,
             callbacks: {
               label: (ctx) => ctx.parsed.y.toFixed(1) + ' ' + Store.getSettings().weightUnit,
             },
@@ -496,6 +567,7 @@ const App = (() => {
       </div>
     `).join('');
 
+    staggerListItems('#dose-list .dose-item');
     renderDoseChart(filtered);
   }
 
@@ -509,6 +581,7 @@ const App = (() => {
       return;
     }
 
+    const gradient = createChartGradient(ctx, 'rgba(20,184,166,0.3)', 'rgba(20,184,166,0.01)');
     doseChart = new Chart(ctx, {
       type: 'line',
       data: {
@@ -517,7 +590,7 @@ const App = (() => {
           label: 'Dose',
           data: jabs.map(j => parseFloat(j.dose)),
           borderColor: colors.teal,
-          backgroundColor: colors.tealLight,
+          backgroundColor: gradient,
           borderWidth: 2,
           tension: 0.3,
           fill: true,
@@ -529,9 +602,18 @@ const App = (() => {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: { duration: 800, easing: 'easeOutQuart' },
         plugins: {
           legend: { display: false },
           tooltip: {
+            backgroundColor: 'rgba(15,23,42,0.9)',
+            titleColor: '#f1f5f9',
+            bodyColor: '#e2e8f0',
+            borderColor: 'rgba(20,184,166,0.3)',
+            borderWidth: 1,
+            cornerRadius: 10,
+            padding: 12,
+            displayColors: false,
             callbacks: {
               label: (ctx) => ctx.parsed.y + ' ' + (jabs[ctx.dataIndex]?.doseUnit || 'mg'),
             },
@@ -640,13 +722,42 @@ const App = (() => {
 
     updateWeightUnitLabels();
 
-    // Stats
-    document.getElementById('prog-current').textContent = stats.currentWeight ? formatWeightShort(stats.currentWeight) + ' ' + unit : '--';
-    document.getElementById('prog-start').textContent = stats.startWeight ? formatWeightShort(stats.startWeight) + ' ' + unit : '--';
-    document.getElementById('prog-total-lost').textContent = stats.totalLost ? formatWeightShort(stats.totalLost) + ' ' + unit : '--';
-    document.getElementById('prog-pct-lost').textContent = stats.progressPercent > 0 ? stats.progressPercent.toFixed(0) + '%' : '--';
-    document.getElementById('prog-to-goal').textContent = stats.weightToGo !== null ? formatWeightShort(stats.weightToGo) + ' ' + unit : '--';
-    document.getElementById('prog-weekly-avg').textContent = stats.avgWeeklyLoss ? stats.avgWeeklyLoss.toFixed(2) + ' ' + unit : '--';
+    // Stats with animated counters
+    if (stats.currentWeight) {
+      animateValue(document.getElementById('prog-current'), stats.currentWeight, 600, ' ' + unit);
+    } else {
+      document.getElementById('prog-current').textContent = '--';
+    }
+
+    if (stats.startWeight) {
+      animateValue(document.getElementById('prog-start'), stats.startWeight, 600, ' ' + unit);
+    } else {
+      document.getElementById('prog-start').textContent = '--';
+    }
+
+    if (stats.totalLost) {
+      animateValue(document.getElementById('prog-total-lost'), stats.totalLost, 600, ' ' + unit);
+    } else {
+      document.getElementById('prog-total-lost').textContent = '--';
+    }
+
+    if (stats.progressPercent > 0) {
+      animateValue(document.getElementById('prog-pct-lost'), stats.progressPercent, 600, '%');
+    } else {
+      document.getElementById('prog-pct-lost').textContent = '--';
+    }
+
+    if (stats.weightToGo !== null) {
+      animateValue(document.getElementById('prog-to-goal'), stats.weightToGo, 600, ' ' + unit);
+    } else {
+      document.getElementById('prog-to-goal').textContent = '--';
+    }
+
+    if (stats.avgWeeklyLoss) {
+      animateValue(document.getElementById('prog-weekly-avg'), stats.avgWeeklyLoss, 600, ' ' + unit);
+    } else {
+      document.getElementById('prog-weekly-avg').textContent = '--';
+    }
 
     // Weight count
     document.getElementById('weight-count').textContent = weights.length;
@@ -678,11 +789,12 @@ const App = (() => {
       return;
     }
 
+    const gradient = createChartGradient(ctx, 'rgba(99,102,241,0.3)', 'rgba(99,102,241,0.01)');
     const datasets = [{
       label: 'Weight',
       data: weights.map(w => ({ x: w.date, y: parseFloat(w.weight) })),
       borderColor: colors.primary,
-      backgroundColor: colors.primaryLight,
+      backgroundColor: gradient,
       borderWidth: 2,
       tension: 0.4,
       fill: true,
@@ -709,10 +821,19 @@ const App = (() => {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: { duration: 800, easing: 'easeOutQuart' },
         interaction: { intersect: false, mode: 'index' },
         plugins: {
           legend: { display: !!goals.targetWeight, labels: { color: colors.textMuted, font: { size: 10 } } },
           tooltip: {
+            backgroundColor: 'rgba(15,23,42,0.9)',
+            titleColor: '#f1f5f9',
+            bodyColor: '#e2e8f0',
+            borderColor: 'rgba(99,102,241,0.3)',
+            borderWidth: 1,
+            cornerRadius: 10,
+            padding: 12,
+            displayColors: false,
             callbacks: {
               label: (ctx) => ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(1) + ' ' + Store.getSettings().weightUnit,
             },
@@ -770,6 +891,7 @@ const App = (() => {
         </div>
       `;
     }).join('');
+    staggerListItems('#weight-entries-list .weight-item');
   }
 
   function removeWeight(id) {
