@@ -1734,15 +1734,6 @@ const App = (() => {
     document.getElementById('whatif-rate').addEventListener('input', updateWhatIf);
 
     updateWeightUnitLabels();
-
-    const linkExportButton = document.getElementById('btn-export-link') || document.getElementById('btn-copy-backup');
-    if (linkExportButton) {
-      const size = await Store.getBackupSizeInfo();
-      linkExportButton.disabled = size.exceedsSafeLink;
-      linkExportButton.title = size.exceedsSafeLink
-        ? 'Backup too large for a safe URL. Export and share a backup file instead.'
-        : 'Create a full restore backup link';
-    }
   }
 
   function openWeightModal(id) {
@@ -2272,21 +2263,29 @@ const App = (() => {
     }
 
     async function exportBackupFile(preferCompressed, largePayloadFallback) {
-      const data = await Store.exportData();
+      const passphrase = prompt('Create a backup passphrase (minimum 8 characters). You will need it to restore this file.');
+      if (passphrase === null) return;
       const dateStamp = new Date().toISOString().split('T')[0];
       try {
+        const encryptedPayload = await Store.exportEncryptedBackup(passphrase);
         if (preferCompressed) {
-          const compressedBlob = await buildCompressedBackupBlob(data);
+          const compressedBlob = await buildCompressedBackupBlob(encryptedPayload);
           if (compressedBlob) {
             triggerDownload(compressedBlob, 'jabit-backup-' + dateStamp + '.json.gz');
-            toast(largePayloadFallback ? 'Backup too large for link; file export created instead.' : 'Compressed backup exported!', 'success');
+            toast(largePayloadFallback ? 'Large URL payload blocked; encrypted backup file exported instead.' : 'Encrypted backup exported!', 'success');
             return;
           }
         }
-        triggerDownload(new Blob([data], { type: 'application/json' }), 'jabit-backup-' + dateStamp + '.json');
-        toast(largePayloadFallback ? 'Backup too large for link; file export created instead.' : 'Backup file exported!', 'success');
-      } catch {
-        toast('Backup export failed. Please try again.', 'error');
+        triggerDownload(new Blob([encryptedPayload], { type: 'application/json' }), 'jabit-backup-' + dateStamp + '.json');
+        toast(largePayloadFallback ? 'Large URL payload blocked; encrypted backup file exported instead.' : 'Encrypted backup exported!', 'success');
+      } catch (err) {
+        if (err && err.message === 'invalid-passphrase') {
+          toast('Use a passphrase with at least 8 characters.', 'error');
+        } else if (err && err.message === 'crypto-not-supported') {
+          toast('Encrypted backups are not supported in this browser.', 'error');
+        } else {
+          toast('Backup export failed. Please try again.', 'error');
+        }
       }
     }
 
@@ -2306,11 +2305,8 @@ const App = (() => {
 
     async function updateBackupLinkState() {
       if (!linkExportButton) return;
-      const size = await Store.getBackupSizeInfo();
-      linkExportButton.disabled = size.exceedsSafeLink;
-      linkExportButton.title = size.exceedsSafeLink
-        ? 'Backup too large for a safe URL. Export and share a backup file instead.'
-        : 'Create a full restore backup link';
+      linkExportButton.disabled = false;
+      linkExportButton.title = 'Create a metadata-only backup link (no personal entries included).';
     }
 
     async function importFromEncodedPayload(encoded, fromRestoreParam) {
@@ -2326,7 +2322,11 @@ const App = (() => {
         return;
       }
       if (importResult.metadataOnly) {
-        toast('This is a metadata-only link. Ask for the backup file to fully restore data.', 'error');
+        toast('This is a metadata-only link. Ask for the encrypted backup file to fully restore data.', 'error');
+        return;
+      }
+      if (importResult.blocked) {
+        toast('Restore link blocked for privacy. Use Import Data with an encrypted backup file instead.', 'error');
         return;
       }
       toast('Invalid backup link.', 'error');
@@ -2376,7 +2376,17 @@ const App = (() => {
 
       try {
         const content = await readBackupFile(file);
-        const importResult = await Store.importData(content);
+        let importResult = await Store.importBackupData(content, '');
+
+        if (importResult.requiresPassphrase) {
+          const passphrase = prompt('Enter the backup passphrase to decrypt this file.');
+          if (passphrase === null) {
+            e.target.value = '';
+            return;
+          }
+          importResult = await Store.importBackupData(content, passphrase);
+        }
+
         if (importResult.success) {
           if (importResult.warnings > 0) {
             toast('Data imported with ' + importResult.warnings + ' skipped invalid row(s).', 'success');
@@ -2386,6 +2396,8 @@ const App = (() => {
           bootApp();
           navigateTo('summary');
           await updateBackupLinkState();
+        } else if (importResult.requiresPassphrase && importResult.error === 'invalid-passphrase') {
+          toast('Incorrect passphrase. Please try again.', 'error');
         } else {
           toast('Import failed. Invalid file.', 'error');
         }
@@ -2400,35 +2412,22 @@ const App = (() => {
       e.target.value = '';
     });
 
-    // Export/copy backup link
+    // Export/copy backup link (metadata only)
     if (linkExportButton) {
-      linkExportButton.addEventListener('click', async () => {
-        const size = await Store.getBackupSizeInfo();
-
-        if (size.exceedsSafeLink) {
-          exportBackupFile(true, true);
-          const metadataEncoded = Store.generateMetadataBackupLink();
-          if (metadataEncoded) {
-            const metadataLink = window.location.origin + window.location.pathname + '?restore=' + metadataEncoded;
-            copyText(metadataLink, 'Metadata-only link copied. Share backup file for full restore.');
-          }
-          return;
-        }
-
-        const encoded = await Store.generateBackupLink();
+      linkExportButton.addEventListener('click', () => {
+        const encoded = Store.generateMetadataBackupLink();
         if (!encoded) {
-          toast('Failed to generate backup link.', 'error');
+          toast('Failed to generate metadata link.', 'error');
           return;
         }
-
         const link = window.location.origin + window.location.pathname + '?restore=' + encoded;
-        copyText(link, 'Backup link copied!');
+        copyText(link, 'Metadata-only link copied. Share encrypted backup file for full restore.');
       });
     }
 
     // Paste backup link
     document.getElementById('btn-paste-backup').addEventListener('click', () => {
-      const input = prompt('Paste your backup link. For full restore, use a backup file export.');
+      const input = prompt('Paste a metadata backup link. For full restore, use an encrypted backup file.');
       if (!input) return;
       let encoded = input;
       if (input.includes('?restore=')) {
