@@ -98,6 +98,9 @@
         <h1>Summary</h1>
       </div>
 
+      <!-- In-app reminder banners (fallback when browser notifications unavailable) -->
+      <div id="reminder-banners"></div>
+
       <!-- Streak & Milestones Row -->
       <div class="streak-milestones-row" id="streak-milestones-row" style="display:none;">
         <div class="streak-counter" id="streak-counter">
@@ -496,7 +499,7 @@
             <label class="checkbox-label">
               <input type="checkbox" id="set-dose-reminder"> Enable Dose Reminders
             </label>
-            <p class="form-help">Get notified when your next dose is due (requires browser notification permission)</p>
+            <p class="form-help">Get notified when your next dose is due. Uses browser notifications when available, or in-app banners on the Summary page.</p>
           </div>
           <div class="form-group">
             <label class="checkbox-label">
