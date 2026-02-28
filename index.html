@@ -5,9 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Jab It: Weight Loss Tracker</title>
   <meta name="description" content="Track your weight loss journey and medication doses">
-  <meta name="theme-color" content="#ffffff">
+  <meta name="theme-color" content="#6366f1">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚖️</text></svg>">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x2696;&#xFE0F;</text></svg>">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -17,7 +20,7 @@
 </head>
 <body>
   <!-- Onboarding Modal -->
-  <div id="onboarding-modal" class="modal-overlay" style="display:none;">
+  <div id="onboarding-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Welcome setup">
     <div class="modal">
       <div class="modal-header">
         <h2>Welcome!</h2>
@@ -26,7 +29,7 @@
       <form id="onboarding-form" class="modal-body">
         <div class="form-group">
           <label for="ob-name">Your Name</label>
-          <input type="text" id="ob-name" placeholder="Enter your name" required>
+          <input type="text" id="ob-name" placeholder="Enter your name" required autocomplete="name">
         </div>
         <div class="form-row">
           <div class="form-group">
@@ -74,6 +77,18 @@
     </div>
   </div>
 
+  <!-- Onboarding Tour Overlay -->
+  <div id="tour-overlay" class="tour-overlay" style="display:none;">
+    <div class="tour-tooltip" id="tour-tooltip">
+      <div class="tour-step-label" id="tour-step-label">Step 1 of 5</div>
+      <p class="tour-text" id="tour-text"></p>
+      <div class="tour-actions">
+        <button class="btn btn-ghost btn-sm" id="tour-skip">Skip Tour</button>
+        <button class="btn btn-primary btn-sm" id="tour-next">Next</button>
+      </div>
+    </div>
+  </div>
+
   <!-- App Shell -->
   <div id="app" style="display:none;">
 
@@ -83,33 +98,65 @@
         <h1>Summary</h1>
       </div>
 
+      <!-- Streak & Milestones Row -->
+      <div class="streak-milestones-row" id="streak-milestones-row" style="display:none;">
+        <div class="streak-counter" id="streak-counter">
+          <span class="streak-flame" aria-hidden="true">&#x1F525;</span>
+          <span class="streak-value" id="streak-value">0</span>
+          <span class="streak-label" id="streak-label">week streak</span>
+        </div>
+        <div class="milestones-row" id="milestones-row"></div>
+      </div>
+
       <!-- Action Buttons -->
       <div class="action-buttons">
-        <button class="action-btn action-btn-teal" id="btn-quick-dose">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2l1.5 1.5L9 5"/><path d="M14 2l1.5 1.5L14 5"/><rect x="4" y="7" width="16" height="14" rx="2"/><path d="M12 11v6"/><path d="M9 14h6"/></svg>
+        <button class="action-btn action-btn-teal" id="btn-quick-dose" aria-label="Log a dose">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2l1.5 1.5L9 5"/><path d="M14 2l1.5 1.5L14 5"/><rect x="4" y="7" width="16" height="14" rx="2"/><path d="M12 11v6"/><path d="M9 14h6"/></svg>
           <span>Log Dose</span>
         </button>
-        <button class="action-btn action-btn-orange" id="btn-quick-weight">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z"/><path d="M12 7v5l3 3"/></svg>
+        <button class="action-btn action-btn-orange" id="btn-quick-weight" aria-label="Log weight">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z"/><path d="M12 7v5l3 3"/></svg>
           <span>Log Weight</span>
         </button>
       </div>
 
+      <!-- Missed Dose Banner -->
+      <div class="missed-dose-banner" id="missed-dose-banner" style="display:none;" role="alert">
+        <div class="missed-dose-content">
+          <span class="missed-dose-icon" aria-hidden="true">&#x26A0;&#xFE0F;</span>
+          <div>
+            <strong id="missed-dose-text">Dose overdue!</strong>
+            <p class="missed-dose-sub">Tap to log your dose or mark as missed</p>
+          </div>
+        </div>
+        <div class="missed-dose-actions">
+          <button class="btn btn-primary btn-sm" id="btn-log-overdue">Log Dose</button>
+          <button class="btn btn-outline btn-sm" id="btn-log-missed">Log Missed</button>
+        </div>
+      </div>
+
       <!-- Next Dose Card -->
-      <div class="next-dose-card">
+      <div class="next-dose-card" id="tour-target-dose">
         <h3 class="section-title">Next Dose</h3>
         <div class="dose-ring-container">
-          <canvas id="chart-dose-ring" width="160" height="160"></canvas>
+          <canvas id="chart-dose-ring" width="160" height="160" aria-label="Next dose countdown"></canvas>
           <div class="dose-ring-label">
             <span class="dose-ring-value" id="dose-ring-value">--</span>
             <span class="dose-ring-sub" id="dose-ring-sub">days</span>
           </div>
         </div>
         <p class="dose-ring-info" id="dose-ring-info">No doses logged yet</p>
+        <p class="dose-countdown-detail" id="dose-countdown-detail" style="display:none;"></p>
+      </div>
+
+      <!-- Projected Goal Date -->
+      <div class="projected-goal-card" id="projected-goal-card" style="display:none;">
+        <div class="projected-goal-icon" aria-hidden="true">&#x1F3AF;</div>
+        <p id="projected-goal-text"></p>
       </div>
 
       <!-- Stats Grid -->
-      <div class="summary-stats">
+      <div class="summary-stats" id="tour-target-stats">
         <div class="summary-stat">
           <div class="summary-stat-value" id="sum-total-doses">0</div>
           <div class="summary-stat-label">Total Doses</div>
@@ -136,8 +183,17 @@
         </div>
       </div>
 
+      <!-- Mini Sparkline -->
+      <div class="sparkline-card" id="sparkline-card" style="display:none;">
+        <div class="sparkline-header">
+          <span class="sparkline-title">Weight Trend (30d)</span>
+          <span class="sparkline-change" id="sparkline-change"></span>
+        </div>
+        <canvas id="sparkline-canvas" width="280" height="40" aria-label="30-day weight sparkline"></canvas>
+      </div>
+
       <!-- Weight Trend -->
-      <div class="section-header">
+      <div class="section-header" id="tour-target-chart">
         <h3 class="section-title">Weight Trend</h3>
         <a href="#progress" class="see-all-link" data-page="progress">See all</a>
       </div>
@@ -150,11 +206,11 @@
     <section class="page" id="page-doses">
       <div class="page-title">
         <h1>Doses</h1>
-        <button class="btn btn-add" id="btn-add-dose">+ Add</button>
+        <button class="btn btn-add" id="btn-add-dose" aria-label="Add dose">+ Add</button>
       </div>
 
       <!-- Time Filters -->
-      <div class="time-filters" id="dose-filters">
+      <div class="time-filters" id="dose-filters" role="group" aria-label="Time range filter">
         <button class="filter-chip" data-range="7">1W</button>
         <button class="filter-chip" data-range="30">1M</button>
         <button class="filter-chip" data-range="90">3M</button>
@@ -167,12 +223,67 @@
         <canvas id="chart-doses"></canvas>
       </div>
 
+      <!-- Injection Site Rotation -->
+      <div class="site-rotation-card" id="site-rotation-card" style="display:none;">
+        <h3 class="section-title">Injection Site Rotation</h3>
+        <div class="body-diagram" id="body-diagram" role="img" aria-label="Injection site diagram">
+          <svg viewBox="0 0 200 340" class="body-svg">
+            <!-- Body outline -->
+            <ellipse cx="100" cy="30" rx="22" ry="28" fill="none" stroke="var(--text-muted)" stroke-width="1.5" opacity="0.5"/>
+            <line x1="100" y1="58" x2="100" y2="180" stroke="var(--text-muted)" stroke-width="1.5" opacity="0.5"/>
+            <line x1="100" y1="80" x2="45" y2="130" stroke="var(--text-muted)" stroke-width="1.5" opacity="0.5"/>
+            <line x1="100" y1="80" x2="155" y2="130" stroke="var(--text-muted)" stroke-width="1.5" opacity="0.5"/>
+            <line x1="100" y1="180" x2="70" y2="320" stroke="var(--text-muted)" stroke-width="1.5" opacity="0.5"/>
+            <line x1="100" y1="180" x2="130" y2="320" stroke="var(--text-muted)" stroke-width="1.5" opacity="0.5"/>
+            <!-- Injection site markers -->
+            <circle id="site-abdomen-left" cx="80" cy="145" r="14" class="site-marker" data-site="abdomen-left"/>
+            <text x="80" y="149" text-anchor="middle" class="site-marker-text">L</text>
+            <circle id="site-abdomen-right" cx="120" cy="145" r="14" class="site-marker" data-site="abdomen-right"/>
+            <text x="120" y="149" text-anchor="middle" class="site-marker-text">R</text>
+            <circle id="site-thigh-left" cx="78" cy="240" r="14" class="site-marker" data-site="thigh-left"/>
+            <text x="78" y="244" text-anchor="middle" class="site-marker-text">L</text>
+            <circle id="site-thigh-right" cx="122" cy="240" r="14" class="site-marker" data-site="thigh-right"/>
+            <text x="122" y="244" text-anchor="middle" class="site-marker-text">R</text>
+            <circle id="site-arm-left" cx="42" cy="110" r="14" class="site-marker" data-site="arm-left"/>
+            <text x="42" y="114" text-anchor="middle" class="site-marker-text">L</text>
+            <circle id="site-arm-right" cx="158" cy="110" r="14" class="site-marker" data-site="arm-right"/>
+            <text x="158" y="114" text-anchor="middle" class="site-marker-text">R</text>
+            <!-- Labels -->
+            <text x="100" y="170" text-anchor="middle" class="site-area-label">Abdomen</text>
+            <text x="100" y="270" text-anchor="middle" class="site-area-label">Thigh</text>
+            <text x="28" y="90" text-anchor="middle" class="site-area-label">Arm</text>
+            <text x="172" y="90" text-anchor="middle" class="site-area-label">Arm</text>
+          </svg>
+        </div>
+        <p class="site-recommendation" id="site-recommendation"></p>
+      </div>
+
+      <!-- Side Effect Trends -->
+      <div class="side-effect-trends" id="side-effect-trends" style="display:none;">
+        <div class="section-header">
+          <h3 class="section-title">Side Effect Trends</h3>
+        </div>
+        <div id="side-effect-summary"></div>
+      </div>
+
+      <!-- Dose Escalation Timeline -->
+      <div class="escalation-section" id="escalation-section" style="display:none;">
+        <div class="section-header">
+          <h3 class="section-title">Dose Escalation</h3>
+        </div>
+        <div id="escalation-list" class="escalation-timeline"></div>
+      </div>
+
       <!-- Dose List -->
+      <div class="section-header" style="margin-top:16px;">
+        <h3 class="section-title">All Doses</h3>
+        <span class="entry-count" id="dose-count">0</span>
+      </div>
       <div id="dose-list"></div>
 
       <!-- Empty State -->
       <div class="empty-state-container" id="dose-empty">
-        <svg class="empty-icon" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2l1.5 1.5L9 5"/><path d="M14 2l1.5 1.5L14 5"/><rect x="4" y="7" width="16" height="14" rx="2"/><path d="M12 11v6"/><path d="M9 14h6"/></svg>
+        <svg class="empty-icon" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2l1.5 1.5L9 5"/><path d="M14 2l1.5 1.5L14 5"/><rect x="4" y="7" width="16" height="14" rx="2"/><path d="M12 11v6"/><path d="M9 14h6"/></svg>
         <h3>No doses logged</h3>
         <p>Tap + to log your first dose</p>
         <button class="btn btn-primary" id="btn-first-dose">Log First Dose</button>
@@ -183,11 +294,11 @@
     <section class="page" id="page-progress">
       <div class="page-title">
         <h1>Progress</h1>
-        <button class="btn btn-add" id="btn-add-weight">+ Log</button>
+        <button class="btn btn-add" id="btn-add-weight" aria-label="Log weight">+ Log</button>
       </div>
 
       <!-- Time Filters -->
-      <div class="time-filters" id="progress-filters">
+      <div class="time-filters" id="progress-filters" role="group" aria-label="Time range filter">
         <button class="filter-chip" data-range="7">1W</button>
         <button class="filter-chip" data-range="30">1M</button>
         <button class="filter-chip" data-range="90">3M</button>
@@ -201,6 +312,12 @@
       </div>
       <div class="chart-container chart-container-lg">
         <canvas id="chart-weight-full"></canvas>
+      </div>
+
+      <!-- Rate of Loss -->
+      <div class="rate-of-loss-card" id="rate-of-loss-card" style="display:none;">
+        <span class="rate-of-loss-icon" aria-hidden="true">&#x1F4C9;</span>
+        <span id="rate-of-loss-text"></span>
       </div>
 
       <!-- Progress Stats -->
@@ -231,6 +348,22 @@
         </div>
       </div>
 
+      <!-- Progress Photos -->
+      <div class="section-header">
+        <h3 class="section-title">Progress Photos</h3>
+        <button class="btn btn-add" id="btn-add-photo" aria-label="Add progress photo">+ Photo</button>
+      </div>
+      <div id="photo-gallery" class="photo-gallery"></div>
+      <p class="empty-text" id="photo-empty">No photos yet. Add your first progress photo!</p>
+
+      <!-- Non-Scale Victories -->
+      <div class="section-header">
+        <h3 class="section-title">Non-Scale Victories</h3>
+        <button class="btn btn-add" id="btn-add-nsv" aria-label="Add non-scale victory">+ Add</button>
+      </div>
+      <div id="nsv-list"></div>
+      <p class="empty-text" id="nsv-empty">Track wins beyond the scale!</p>
+
       <!-- Weight Entries -->
       <div class="section-header">
         <h3 class="section-title">All Entries</h3>
@@ -238,6 +371,14 @@
       </div>
       <div id="weight-entries-list"></div>
       <p class="empty-text" id="weight-empty">No weight entries yet</p>
+
+      <!-- Share Card -->
+      <div style="text-align:center;margin:16px 0;">
+        <button class="btn btn-outline" id="btn-share-card" style="display:none;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          Share Progress Card
+        </button>
+      </div>
     </section>
 
     <!-- ===== Settings Page ===== -->
@@ -252,7 +393,7 @@
         <div class="settings-card">
           <div class="form-group">
             <label for="set-name">Name</label>
-            <input type="text" id="set-name">
+            <input type="text" id="set-name" autocomplete="name">
           </div>
           <div class="form-row">
             <div class="form-group">
@@ -323,14 +464,60 @@
         </div>
       </div>
 
+      <!-- Appearance Section -->
+      <div class="settings-section">
+        <h3 class="settings-section-title">Appearance</h3>
+        <div class="settings-card">
+          <div class="form-group">
+            <label for="set-theme">Theme</label>
+            <select id="set-theme">
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+              <option value="calm">Calm</option>
+              <option value="auto">Auto (System)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reminders Section -->
+      <div class="settings-section">
+        <h3 class="settings-section-title">Reminders</h3>
+        <div class="settings-card">
+          <div class="form-group">
+            <label for="set-weigh-schedule">Weigh-in Schedule</label>
+            <select id="set-weigh-schedule">
+              <option value="daily">Daily</option>
+              <option value="every3">Every 3 Days</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="set-dose-reminder"> Enable Dose Reminders
+            </label>
+            <p class="form-help">Get notified when your next dose is due (requires browser notification permission)</p>
+          </div>
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="set-weighin-reminder"> Enable Weigh-in Reminders
+            </label>
+          </div>
+          <button class="btn btn-outline btn-sm" id="btn-test-notification" type="button">Test Notification</button>
+        </div>
+      </div>
+
       <!-- Data Section -->
       <div class="settings-section">
         <h3 class="settings-section-title">Data</h3>
         <div class="settings-card">
           <div class="data-buttons">
-            <button class="btn btn-outline btn-block" id="btn-export">Export Data</button>
+            <button class="btn btn-outline btn-block" id="btn-export">Export Data (JSON)</button>
+            <button class="btn btn-outline btn-block" id="btn-export-csv">Export Data (CSV)</button>
             <button class="btn btn-outline btn-block" id="btn-import">Import Data</button>
-            <input type="file" id="import-file" accept=".json" style="display:none;">
+            <input type="file" id="import-file" accept=".json" style="display:none;" aria-hidden="true">
+            <button class="btn btn-outline btn-block" id="btn-copy-backup">Copy Backup Link</button>
+            <button class="btn btn-outline btn-block" id="btn-paste-backup">Restore from Backup Link</button>
             <button class="btn btn-danger btn-block" id="btn-clear-data">Clear All Data</button>
           </div>
         </div>
@@ -340,11 +527,11 @@
     </section>
 
     <!-- ===== Dose Entry Modal ===== -->
-    <div id="dose-modal" class="modal-overlay" style="display:none;">
+    <div id="dose-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Log dose">
       <div class="modal">
         <div class="modal-header">
           <h3 id="dose-modal-title">Log Dose</h3>
-          <button class="btn-close" id="dose-modal-close">&times;</button>
+          <button class="btn-close" id="dose-modal-close" aria-label="Close">&times;</button>
         </div>
         <form id="dose-form" class="modal-body">
           <input type="hidden" id="dose-edit-id">
@@ -394,7 +581,7 @@
           </div>
           <div class="form-group">
             <label>Side Effects</label>
-            <div class="checkbox-group">
+            <div class="checkbox-group" role="group" aria-label="Side effects">
               <label class="checkbox-label"><input type="checkbox" name="side-effect" value="nausea"> Nausea</label>
               <label class="checkbox-label"><input type="checkbox" name="side-effect" value="headache"> Headache</label>
               <label class="checkbox-label"><input type="checkbox" name="side-effect" value="fatigue"> Fatigue</label>
@@ -418,11 +605,11 @@
     </div>
 
     <!-- ===== Weight Entry Modal ===== -->
-    <div id="weight-modal" class="modal-overlay" style="display:none;">
+    <div id="weight-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Log weight">
       <div class="modal">
         <div class="modal-header">
           <h3 id="weight-modal-title">Log Weight</h3>
-          <button class="btn-close" id="weight-modal-close">&times;</button>
+          <button class="btn-close" id="weight-modal-close" aria-label="Close">&times;</button>
         </div>
         <form id="weight-form" class="modal-body">
           <input type="hidden" id="weight-edit-id">
@@ -446,28 +633,152 @@
       </div>
     </div>
 
+    <!-- ===== NSV Modal ===== -->
+    <div id="nsv-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Add non-scale victory">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>Non-Scale Victory</h3>
+          <button class="btn-close" id="nsv-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <form id="nsv-form" class="modal-body">
+          <div class="form-group">
+            <label for="nsv-date">Date</label>
+            <input type="date" id="nsv-date" required>
+          </div>
+          <div class="form-group">
+            <label for="nsv-category">Category</label>
+            <select id="nsv-category">
+              <option value="fitness">Fitness</option>
+              <option value="clothing">Clothing</option>
+              <option value="energy">Energy</option>
+              <option value="health">Health</option>
+              <option value="confidence">Confidence</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="nsv-text">What happened?</label>
+            <textarea id="nsv-text" rows="3" placeholder="e.g. Walked 5k without stopping!" required></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-ghost" id="nsv-form-cancel">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ===== Photo Modal ===== -->
+    <div id="photo-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Add progress photo">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>Progress Photo</h3>
+          <button class="btn-close" id="photo-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <form id="photo-form" class="modal-body">
+          <div class="form-group">
+            <label for="photo-date">Date</label>
+            <input type="date" id="photo-date" required>
+          </div>
+          <div class="form-group">
+            <label for="photo-file">Photo</label>
+            <input type="file" id="photo-file" accept="image/*" required>
+            <p class="form-help">Photos are stored locally on your device (max ~300KB each)</p>
+          </div>
+          <div class="form-group">
+            <label for="photo-note">Note (optional)</label>
+            <input type="text" id="photo-note" placeholder="e.g. Front view, Week 4">
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-ghost" id="photo-form-cancel">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ===== Photo Viewer Modal ===== -->
+    <div id="photo-viewer-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Photo comparison">
+      <div class="modal photo-viewer-content">
+        <div class="modal-header">
+          <h3>Compare Photos</h3>
+          <button class="btn-close" id="photo-viewer-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="photo-compare" id="photo-compare">
+          <div class="photo-compare-item">
+            <select id="photo-compare-left" aria-label="Left photo selection"></select>
+            <div class="photo-frame" id="photo-frame-left"></div>
+          </div>
+          <div class="photo-compare-item">
+            <select id="photo-compare-right" aria-label="Right photo selection"></select>
+            <div class="photo-frame" id="photo-frame-right"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Share Card Modal ===== -->
+    <div id="share-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Share progress card">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>Your Progress Card</h3>
+          <button class="btn-close" id="share-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body" style="text-align:center;">
+          <canvas id="share-card-canvas" width="600" height="400" style="max-width:100%;border-radius:12px;"></canvas>
+          <div class="form-actions" style="justify-content:center;margin-top:16px;">
+            <button class="btn btn-primary" id="btn-download-card">Download Image</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Missed Dose Modal ===== -->
+    <div id="missed-dose-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Log missed dose">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>Log Missed Dose</h3>
+          <button class="btn-close" id="missed-dose-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <form id="missed-dose-form" class="modal-body">
+          <div class="form-group">
+            <label for="missed-dose-date">Scheduled Date</label>
+            <input type="date" id="missed-dose-date" required>
+          </div>
+          <div class="form-group">
+            <label for="missed-dose-reason">Reason (optional)</label>
+            <textarea id="missed-dose-reason" rows="2" placeholder="Why was this dose missed?"></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-ghost" id="missed-dose-cancel">Cancel</button>
+            <button type="submit" class="btn btn-primary">Log Missed Dose</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Bottom Navigation -->
-    <nav class="bottom-nav" id="bottom-nav">
-      <a href="#summary" class="nav-tab active" data-page="summary">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    <nav class="bottom-nav" id="bottom-nav" role="navigation" aria-label="Main navigation">
+      <a href="#summary" class="nav-tab active" data-page="summary" role="tab" aria-selected="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         <span>Summary</span>
       </a>
-      <a href="#doses" class="nav-tab" data-page="doses">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2l1.5 1.5L9 5"/><path d="M14 2l1.5 1.5L14 5"/><rect x="4" y="7" width="16" height="14" rx="2"/><path d="M12 11v6"/><path d="M9 14h6"/></svg>
+      <a href="#doses" class="nav-tab" data-page="doses" role="tab" aria-selected="false">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2l1.5 1.5L9 5"/><path d="M14 2l1.5 1.5L14 5"/><rect x="4" y="7" width="16" height="14" rx="2"/><path d="M12 11v6"/><path d="M9 14h6"/></svg>
         <span>Doses</span>
       </a>
-      <a href="#progress" class="nav-tab" data-page="progress">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      <a href="#progress" class="nav-tab" data-page="progress" role="tab" aria-selected="false">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
         <span>Progress</span>
       </a>
-      <a href="#settings" class="nav-tab" data-page="settings">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <a href="#settings" class="nav-tab" data-page="settings" role="tab" aria-selected="false">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         <span>Settings</span>
       </a>
     </nav>
 
     <!-- Toast Notification -->
-    <div class="toast-container" id="toast-container"></div>
+    <div class="toast-container" id="toast-container" aria-live="polite"></div>
   </div>
 
   <script src="js/store.js"></script>
