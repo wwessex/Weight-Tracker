@@ -5,11 +5,13 @@ const App = (() => {
   let currentDoseRange = 'all';
   let countdownInterval = null;
   let remindersInterval = null;
+  let reminderSyncCapabilities = null;
   let isUiBound = false;
   let isHashListenerBound = false;
   let isGlobalListenersBound = false;
   let isPhotoStorageChecked = false;
   const REMINDER_CHECK_INTERVAL_MS = 30 * 60 * 1000;
+  const REMINDER_CATCH_UP_INTERVAL_MS = 2 * 60 * 60 * 1000;
 
   // ===== INIT =====
   function init() {
@@ -36,6 +38,11 @@ const App = (() => {
   function bindGlobalListeners() {
     if (isGlobalListenersBound) return;
     window.addEventListener('beforeunload', teardownReminderChecks);
+    window.addEventListener('focus', handleAppResume);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+    }
     isGlobalListenersBound = true;
   }
 
@@ -75,8 +82,9 @@ const App = (() => {
       setTimeout(startTour, 800);
     }
     // Schedule reminder checks
-    checkReminders();
+    checkReminders({ source: 'app-load', isCatchUp: true });
     scheduleReminderChecks();
+    ensureBackgroundReminderScheduling();
   }
 
   function renderAllPages() {
@@ -103,7 +111,18 @@ const App = (() => {
   // ===== PWA SERVICE WORKER =====
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
+      navigator.serviceWorker.register('sw.js')
+        .then(() => {
+          detectReminderCapabilities();
+          ensureBackgroundReminderScheduling();
+        })
+        .catch(() => {
+          reminderSyncCapabilities = null;
+          refreshReminderCapabilityStatus();
+        });
+    } else {
+      reminderSyncCapabilities = null;
+      refreshReminderCapabilityStatus();
     }
   }
 
@@ -511,10 +530,89 @@ const App = (() => {
     return 'Notification' in window && Notification.permission === 'granted';
   }
 
+  function canUseServiceWorkerNotifications() {
+    return 'serviceWorker' in navigator && 'PushManager' in window;
+  }
+
+  async function detectReminderCapabilities() {
+    const supportsBackgroundSync = 'serviceWorker' in navigator && 'SyncManager' in window;
+    const supportsPeriodicSync = 'serviceWorker' in navigator && 'PeriodicSyncManager' in window;
+    reminderSyncCapabilities = {
+      backgroundSync: supportsBackgroundSync,
+      periodicSync: supportsPeriodicSync,
+    };
+    refreshReminderCapabilityStatus();
+    return reminderSyncCapabilities;
+  }
+
+  function getReminderCapabilityStatus() {
+    if (canUseNativeNotifications()) return 'native push';
+    if (canUseServiceWorkerNotifications()) return 'native push';
+    if (reminderSyncCapabilities && (reminderSyncCapabilities.periodicSync || reminderSyncCapabilities.backgroundSync)) {
+      return 'native push';
+    }
+    return 'in-app only';
+  }
+
+  function refreshReminderCapabilityStatus() {
+    const statusEl = document.getElementById('reminder-capability-status');
+    if (!statusEl) return;
+    statusEl.textContent = getReminderCapabilityStatus();
+  }
+
+  async function ensureBackgroundReminderScheduling() {
+    refreshReminderCapabilityStatus();
+    const settings = Store.getSettings();
+    if (!settings.doseReminderEnabled && !settings.weighInReminderEnabled) return;
+    if (!('serviceWorker' in navigator)) return;
+
+    try {
+      const registration = await navigator.serviceWorker.ready;
+
+      if ('periodicSync' in registration) {
+        try {
+          await registration.periodicSync.register('jabit-reminder-check', {
+            minInterval: REMINDER_CHECK_INTERVAL_MS,
+          });
+          return;
+        } catch {
+          // Permission denied or unsupported; fall back to one-off sync where possible.
+        }
+      }
+
+      if ('sync' in registration) {
+        try {
+          await registration.sync.register('jabit-reminder-check');
+        } catch {
+          // Best-effort only.
+        }
+      }
+    } catch {
+      // Keep in-app interval fallback only.
+    }
+  }
+
+  function handleVisibilityChange() {
+    if (document.visibilityState !== 'visible') return;
+    handleAppResume();
+  }
+
+  function handleAppResume() {
+    checkReminders({ source: 'resume', isCatchUp: true });
+    ensureBackgroundReminderScheduling();
+  }
+
+  function handleServiceWorkerMessage(event) {
+    if (!event || !event.data) return;
+    if (event.data.type === 'CHECK_REMINDERS') {
+      checkReminders({ source: 'sw-sync', isCatchUp: true });
+    }
+  }
+
   function showReminderBanner(type, message) {
     var container = document.getElementById('reminder-banners');
     if (!container) return;
-    var icon = type === 'dose' ? '\uD83D\uDC89' : '\u2696\uFE0F';
+    var icon = type === 'dose' ? '💉' : '⚖️';
     var banner = document.createElement('div');
     banner.className = 'reminder-banner ' + type;
     banner.innerHTML = '<span class="reminder-banner-icon">' + icon + '</span>' +
@@ -527,12 +625,25 @@ const App = (() => {
     container.appendChild(banner);
   }
 
-  function sendReminder(title, message, type) {
+  async function sendReminder(title, message, type) {
     if (canUseNativeNotifications()) {
       new Notification(title, { body: message, icon: 'icons/icon-192.png' });
-    } else {
-      showReminderBanner(type, message);
+      return;
     }
+
+    if ('serviceWorker' in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        if (registration && registration.showNotification) {
+          await registration.showNotification(title, { body: message, icon: 'icons/icon-192.png', tag: type });
+          return;
+        }
+      } catch {
+        // Fall through to in-app banner.
+      }
+    }
+
+    showReminderBanner(type, message);
   }
 
   function getReminderDedupState() {
@@ -553,14 +664,48 @@ const App = (() => {
     return true;
   }
 
-  function checkReminders() {
+  function getDoseReminderWindowKey(diff) {
+    if (diff === 0) return 'due-window:' + formatLocalDate(new Date());
+    if (diff < 0) {
+      const overdueDays = Math.abs(diff);
+      const now = new Date();
+      const windowStart = new Date(now);
+      windowStart.setDate(now.getDate() - overdueDays);
+      return 'overdue-window:' + formatLocalDate(windowStart) + ':' + formatLocalDate(now);
+    }
+    return null;
+  }
+
+  function getWeighInReminderWindowKey(daysSince, threshold) {
+    const now = new Date();
+    const windowStart = new Date(now);
+    windowStart.setDate(now.getDate() - Math.max(daysSince, threshold));
+    return 'weigh-window:' + threshold + ':' + formatLocalDate(windowStart) + ':' + formatLocalDate(now);
+  }
+
+  function shouldRunCatchUpCheck(lastReminderCheckAt) {
+    if (!lastReminderCheckAt) return true;
+    const parsed = new Date(lastReminderCheckAt);
+    if (Number.isNaN(parsed.getTime())) return true;
+    return (Date.now() - parsed.getTime()) >= REMINDER_CATCH_UP_INTERVAL_MS;
+  }
+
+  function checkReminders(options = {}) {
     const settings = Store.getSettings();
     var container = document.getElementById('reminder-banners');
     if (container) container.innerHTML = '';
 
-    if (!settings.doseReminderEnabled && !settings.weighInReminderEnabled) return;
+    const isCatchUp = !!options.isCatchUp;
 
-    const today = formatLocalDate(new Date());
+    if (!settings.doseReminderEnabled && !settings.weighInReminderEnabled) {
+      refreshReminderCapabilityStatus();
+      return;
+    }
+
+    if (isCatchUp && !shouldRunCatchUpCheck(settings.lastReminderCheckAt)) {
+      refreshReminderCapabilityStatus();
+      return;
+    }
 
     const stats = Store.getStats();
 
@@ -568,12 +713,12 @@ const App = (() => {
     if (settings.doseReminderEnabled && stats.nextJabDate) {
       const diff = dayDiff(new Date(), stats.nextJabDate);
       if (diff === 0) {
-        const dedupKey = today + '|due';
+        const dedupKey = getDoseReminderWindowKey(diff);
         if (shouldSendReminder('dose', dedupKey)) {
           sendReminder('Jab It - Dose Reminder', 'Your dose is due today!', 'dose');
         }
       } else if (diff < 0) {
-        const dedupKey = today + '|overdue|' + Math.abs(diff);
+        const dedupKey = getDoseReminderWindowKey(diff);
         if (shouldSendReminder('dose', dedupKey)) {
           sendReminder('Jab It - Dose Overdue', 'Your dose is ' + Math.abs(diff) + ' day(s) overdue.', 'dose');
         }
@@ -591,7 +736,7 @@ const App = (() => {
           const scheduleMap = { daily: 1, every3: 3, weekly: 7 };
           const threshold = scheduleMap[settings.weighInSchedule] || 7;
           if (daysSince >= threshold) {
-            const dedupKey = today + '|due|' + daysSince;
+            const dedupKey = getWeighInReminderWindowKey(daysSince, threshold);
             if (shouldSendReminder('weighin', dedupKey)) {
               sendReminder('Jab It - Weigh-in Reminder', "It's been " + daysSince + ' days since your last weigh-in.', 'weighin');
             }
@@ -599,6 +744,10 @@ const App = (() => {
         }
       }
     }
+
+    settings.lastReminderCheckAt = new Date().toISOString();
+    Store.saveSettings(settings);
+    refreshReminderCapabilityStatus();
   }
 
   // ===== INIT ALL EXTRA MODALS =====
@@ -2381,8 +2530,9 @@ const App = (() => {
 
     applyTheme();
     updateWeightUnitLabels();
-    checkReminders();
+    checkReminders({ source: 'settings-save' });
     scheduleReminderChecks();
+    ensureBackgroundReminderScheduling();
     toast('Settings saved!', 'success');
   }
 
@@ -2406,6 +2556,7 @@ const App = (() => {
     document.getElementById('set-weighin-reminder').checked = !!settings.weighInReminderEnabled;
 
     updateWeightUnitLabels();
+    refreshReminderCapabilityStatus();
   }
 
   // Public API

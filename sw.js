@@ -26,6 +26,21 @@ function isCacheableResponse(response) {
   return Boolean(response && response.ok && response.type !== 'opaque');
 }
 
+async function requestReminderCheckFromClients(trigger) {
+  const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  clients.forEach((client) => {
+    client.postMessage({ type: 'CHECK_REMINDERS', trigger });
+  });
+
+  if (!clients.length && self.registration && self.registration.showNotification) {
+    await self.registration.showNotification('Jab It', {
+      body: 'Open the app to run reminder checks.',
+      icon: 'icons/icon-192.png',
+      tag: 'reminder-check-fallback',
+    });
+  }
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -45,6 +60,34 @@ self.addEventListener('activate', (event) => {
     )
   );
   self.clients.claim();
+});
+
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'jabit-reminder-check') {
+    event.waitUntil(requestReminderCheckFromClients('sync'));
+  }
+});
+
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag === 'jabit-reminder-check') {
+    event.waitUntil(requestReminderCheckFromClients('periodic-sync'));
+  }
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil((async () => {
+    const windowClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of windowClients) {
+      if ('focus' in client) {
+        await client.focus();
+        return;
+      }
+    }
+    if (self.clients.openWindow) {
+      await self.clients.openWindow('./');
+    }
+  })());
 });
 
 self.addEventListener('fetch', (event) => {
