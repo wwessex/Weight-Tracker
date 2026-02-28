@@ -38,6 +38,8 @@ const Store = (() => {
     },
   };
 
+  const SAFE_BACKUP_LINK_CHARS = 12000;
+
   function get(key) {
     try {
       const data = localStorage.getItem(key);
@@ -587,6 +589,17 @@ const Store = (() => {
     }, null, 2);
   }
 
+  function getBackupSizeInfo() {
+    const payload = exportData();
+    const utf8Bytes = new TextEncoder().encode(payload).length;
+    const encodedLength = Math.ceil(utf8Bytes / 3) * 4;
+    return {
+      bytes: utf8Bytes,
+      encodedLength,
+      exceedsSafeLink: encodedLength > SAFE_BACKUP_LINK_CHARS,
+    };
+  }
+
   // Export CSV with weight + dose data
   function exportCSV() {
     const weights = getWeights();
@@ -852,11 +865,45 @@ const Store = (() => {
     }
   }
 
+  function generateMetadataBackupLink() {
+    const profile = getProfile();
+    const settings = getSettings();
+    const weights = getWeights();
+    const jabs = getJabs();
+    const payload = {
+      type: 'metadata',
+      version: 1,
+      exportDate: new Date().toISOString(),
+      profile: {
+        name: profile.name || '',
+        medication: profile.medication || '',
+      },
+      settings: {
+        weightUnit: settings.weightUnit || 'kg',
+        theme: settings.theme || 'light',
+      },
+      counts: {
+        weights: weights.length,
+        jabs: jabs.length,
+      },
+      note: 'Metadata link only. Share exported backup file for full restore.',
+    };
+    try {
+      return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+    } catch {
+      return null;
+    }
+  }
+
   // Import from backup link
   function importFromBackupLink(encoded) {
     const failure = { success: false, warnings: 0 };
     try {
       const json = decodeURIComponent(escape(atob(encoded)));
+      const parsed = JSON.parse(json);
+      if (parsed && parsed.type === 'metadata') {
+        return { success: false, warnings: 0, metadataOnly: true, metadata: parsed };
+      }
       return importData(json);
     } catch {
       return failure;
@@ -881,7 +928,9 @@ const Store = (() => {
     getMovingAverage, getRateOfLoss, getNextRecommendedSite,
     convertWeight, convertAllWeights,
     exportData, exportCSV, importData,
-    generateBackupLink, importFromBackupLink,
+    getBackupSizeInfo,
+    generateBackupLink, generateMetadataBackupLink, importFromBackupLink,
+    SAFE_BACKUP_LINK_CHARS,
     clearAll,
   };
 })();
