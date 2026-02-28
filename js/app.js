@@ -3,6 +3,7 @@ const App = (() => {
   let weightSummaryChart, weightFullChart, doseChart, doseRingChart;
   let currentProgressRange = 'all';
   let currentDoseRange = 'all';
+  let countdownInterval = null;
 
   // ===== INIT =====
   function init() {
@@ -16,6 +17,7 @@ const App = (() => {
       document.getElementById('app').style.display = '';
       bootApp();
     }
+    registerServiceWorker();
   }
 
   function bootApp() {
@@ -25,8 +27,23 @@ const App = (() => {
     initDosesPage();
     initProgressPage();
     initSettingsPage();
+    initModals();
     handleHashChange();
     window.addEventListener('hashchange', handleHashChange);
+    // Show tour if first time
+    const settings = Store.getSettings();
+    if (!settings.onboardingComplete) {
+      setTimeout(startTour, 800);
+    }
+    // Schedule reminder checks
+    checkReminders();
+  }
+
+  // ===== PWA SERVICE WORKER =====
+  function registerServiceWorker() {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
   }
 
   // ===== ONBOARDING =====
@@ -63,6 +80,47 @@ const App = (() => {
     });
   }
 
+  // ===== ONBOARDING TOUR =====
+  function startTour() {
+    const steps = [
+      { text: 'Welcome to Jab It! This is your Summary dashboard. It shows your key stats, streaks, and upcoming doses at a glance.' },
+      { text: 'Use these quick action buttons to log a medication dose or record your weight in seconds.' },
+      { text: 'Your stats grid shows weight lost, BMI, progress toward your goal, and more. Cards update in real-time.' },
+      { text: 'Navigate between Summary, Doses, Progress, and Settings using the bottom tabs.' },
+      { text: "You're all set! Head to Settings to customise reminders, themes, and export options. Good luck on your journey!" },
+    ];
+    let step = 0;
+    const overlay = document.getElementById('tour-overlay');
+    const tooltip = document.getElementById('tour-tooltip');
+    const text = document.getElementById('tour-text');
+    const label = document.getElementById('tour-step-label');
+    const nextBtn = document.getElementById('tour-next');
+    const skipBtn = document.getElementById('tour-skip');
+
+    function show() {
+      if (step >= steps.length) {
+        overlay.style.display = 'none';
+        const settings = Store.getSettings();
+        settings.onboardingComplete = true;
+        Store.saveSettings(settings);
+        return;
+      }
+      label.textContent = 'Step ' + (step + 1) + ' of ' + steps.length;
+      text.textContent = steps[step].text;
+      nextBtn.textContent = step === steps.length - 1 ? 'Done' : 'Next';
+      overlay.style.display = 'flex';
+    }
+
+    nextBtn.addEventListener('click', () => { step++; show(); });
+    skipBtn.addEventListener('click', () => {
+      overlay.style.display = 'none';
+      const settings = Store.getSettings();
+      settings.onboardingComplete = true;
+      Store.saveSettings(settings);
+    });
+    show();
+  }
+
   // ===== NAVIGATION =====
   function initNavigation() {
     document.querySelectorAll('.nav-tab, [data-page]').forEach(link => {
@@ -78,12 +136,18 @@ const App = (() => {
 
   function navigateTo(page) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.nav-tab').forEach(l => l.classList.remove('active'));
+    document.querySelectorAll('.nav-tab').forEach(l => {
+      l.classList.remove('active');
+      l.setAttribute('aria-selected', 'false');
+    });
 
     const pageEl = document.getElementById('page-' + page);
     const navEl = document.querySelector(`.nav-tab[data-page="${page}"]`);
     if (pageEl) pageEl.classList.add('active');
-    if (navEl) navEl.classList.add('active');
+    if (navEl) {
+      navEl.classList.add('active');
+      navEl.setAttribute('aria-selected', 'true');
+    }
 
     window.location.hash = page;
 
@@ -106,6 +170,12 @@ const App = (() => {
       theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
     document.documentElement.setAttribute('data-theme', theme);
+    // Update meta theme-color
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) {
+      const colors = { light: '#f8fafc', dark: '#0f172a', calm: '#f5f0eb' };
+      meta.content = colors[theme] || '#f8fafc';
+    }
   }
 
   // ===== ANIMATION HELPERS =====
@@ -178,11 +248,13 @@ const App = (() => {
     return diff + ' days';
   }
 
-  function toast(msg, type = '') {
+  function toast(msg, type) {
+    type = type || '';
     const container = document.getElementById('toast-container');
     const t = document.createElement('div');
     t.className = 'toast ' + type;
     t.textContent = msg;
+    t.setAttribute('role', 'status');
     container.appendChild(t);
     setTimeout(() => {
       t.classList.add('dismissing');
@@ -200,6 +272,20 @@ const App = (() => {
 
   function getChartColors() {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const isCalm = document.documentElement.getAttribute('data-theme') === 'calm';
+    if (isCalm) {
+      return {
+        primary: '#7c8bbf',
+        primaryLight: 'rgba(124,139,191,0.15)',
+        teal: '#5b9a8b',
+        tealLight: 'rgba(91,154,139,0.15)',
+        success: '#7fb5a0',
+        danger: '#c07070',
+        text: '#3d3832',
+        textMuted: '#9a8f84',
+        grid: 'rgba(154,143,132,0.15)',
+      };
+    }
     return {
       primary: '#6366f1',
       primaryLight: 'rgba(99,102,241,0.15)',
@@ -241,16 +327,254 @@ const App = (() => {
     return labels[site] || site || '--';
   }
 
+  function nsvCategoryIcon(cat) {
+    const icons = { fitness: '&#x1F3C3;', clothing: '&#x1F455;', energy: '&#x26A1;', health: '&#x1F49A;', confidence: '&#x2B50;', other: '&#x1F4DD;' };
+    return icons[cat] || icons.other;
+  }
+
+  // ===== FOCUS TRAP (Accessibility) =====
+  function trapFocus(modal) {
+    const focusable = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    function handler(e) {
+      if (e.key !== 'Tab') return;
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+    modal._focusTrap = handler;
+    modal.addEventListener('keydown', handler);
+    first.focus();
+  }
+
+  function releaseFocus(modal) {
+    if (modal._focusTrap) {
+      modal.removeEventListener('keydown', modal._focusTrap);
+      delete modal._focusTrap;
+    }
+  }
+
+  function openModal(modal) {
+    modal.style.display = 'flex';
+    trapFocus(modal);
+    // Close on Escape
+    modal._escHandler = (e) => { if (e.key === 'Escape') closeModal(modal); };
+    document.addEventListener('keydown', modal._escHandler);
+  }
+
+  function closeModal(modal) {
+    modal.style.display = 'none';
+    releaseFocus(modal);
+    if (modal._escHandler) {
+      document.removeEventListener('keydown', modal._escHandler);
+      delete modal._escHandler;
+    }
+  }
+
+  // ===== REMINDERS (Web Notifications API) =====
+  function checkReminders() {
+    const settings = Store.getSettings();
+    if (!settings.doseReminderEnabled && !settings.weighInReminderEnabled) return;
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+    const stats = Store.getStats();
+
+    // Check dose reminder
+    if (settings.doseReminderEnabled && stats.nextJabDate) {
+      const diff = Math.ceil((new Date(stats.nextJabDate) - new Date()) / (1000 * 60 * 60 * 24));
+      if (diff === 0) {
+        new Notification('Jab It - Dose Reminder', { body: 'Your dose is due today!', icon: 'icons/icon-192.png' });
+      } else if (diff < 0) {
+        new Notification('Jab It - Dose Overdue', { body: 'Your dose is ' + Math.abs(diff) + ' day(s) overdue.', icon: 'icons/icon-192.png' });
+      }
+    }
+
+    // Check weigh-in reminder
+    if (settings.weighInReminderEnabled) {
+      const weights = Store.getWeights();
+      if (weights.length > 0) {
+        const lastWeighDate = new Date(weights[weights.length - 1].date);
+        const daysSince = Math.floor((new Date() - lastWeighDate) / (1000 * 60 * 60 * 24));
+        const scheduleMap = { daily: 1, every3: 3, weekly: 7 };
+        const threshold = scheduleMap[settings.weighInSchedule] || 7;
+        if (daysSince >= threshold) {
+          new Notification('Jab It - Weigh-in Reminder', { body: "It's been " + daysSince + ' days since your last weigh-in.', icon: 'icons/icon-192.png' });
+        }
+      }
+    }
+  }
+
+  // ===== INIT ALL EXTRA MODALS =====
+  function initModals() {
+    // NSV Modal
+    const nsvModal = document.getElementById('nsv-modal');
+    const nsvForm = document.getElementById('nsv-form');
+    document.getElementById('nsv-modal-close').addEventListener('click', () => closeModal(nsvModal));
+    document.getElementById('nsv-form-cancel').addEventListener('click', () => closeModal(nsvModal));
+    nsvModal.addEventListener('click', (e) => { if (e.target === nsvModal) closeModal(nsvModal); });
+    nsvForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      Store.addVictory({
+        date: document.getElementById('nsv-date').value,
+        category: document.getElementById('nsv-category').value,
+        text: document.getElementById('nsv-text').value,
+      });
+      closeModal(nsvModal);
+      toast('Victory logged!', 'success');
+      refreshProgress();
+    });
+
+    // Photo Modal
+    const photoModal = document.getElementById('photo-modal');
+    const photoForm = document.getElementById('photo-form');
+    document.getElementById('photo-modal-close').addEventListener('click', () => closeModal(photoModal));
+    document.getElementById('photo-form-cancel').addEventListener('click', () => closeModal(photoModal));
+    photoModal.addEventListener('click', (e) => { if (e.target === photoModal) closeModal(photoModal); });
+    photoForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const file = document.getElementById('photo-file').files[0];
+      if (!file) return;
+      resizeImage(file, 300, 0.5, (dataUrl) => {
+        Store.addPhoto({
+          date: document.getElementById('photo-date').value,
+          note: document.getElementById('photo-note').value,
+          dataUrl: dataUrl,
+        });
+        closeModal(photoModal);
+        toast('Photo saved!', 'success');
+        refreshProgress();
+      });
+    });
+
+    // Photo Viewer
+    const viewerModal = document.getElementById('photo-viewer-modal');
+    document.getElementById('photo-viewer-close').addEventListener('click', () => closeModal(viewerModal));
+    viewerModal.addEventListener('click', (e) => { if (e.target === viewerModal) closeModal(viewerModal); });
+
+    // Share Card Modal
+    const shareModal = document.getElementById('share-modal');
+    document.getElementById('share-modal-close').addEventListener('click', () => closeModal(shareModal));
+    shareModal.addEventListener('click', (e) => { if (e.target === shareModal) closeModal(shareModal); });
+    document.getElementById('btn-download-card').addEventListener('click', downloadShareCard);
+
+    // Missed Dose Modal
+    const missedModal = document.getElementById('missed-dose-modal');
+    const missedForm = document.getElementById('missed-dose-form');
+    document.getElementById('missed-dose-modal-close').addEventListener('click', () => closeModal(missedModal));
+    document.getElementById('missed-dose-cancel').addEventListener('click', () => closeModal(missedModal));
+    missedModal.addEventListener('click', (e) => { if (e.target === missedModal) closeModal(missedModal); });
+    missedForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      Store.addJab({
+        date: document.getElementById('missed-dose-date').value,
+        time: '',
+        medication: Store.getProfile().medication || 'semaglutide',
+        dose: 0,
+        doseUnit: 'mg',
+        site: '',
+        sideEffects: [],
+        notes: 'MISSED - ' + (document.getElementById('missed-dose-reason').value || 'No reason given'),
+      });
+      closeModal(missedModal);
+      toast('Missed dose logged', 'success');
+      refreshSummary();
+      refreshDoses();
+    });
+  }
+
+  // Image resize helper
+  function resizeImage(file, maxWidth, quality, callback) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w = img.width;
+        let h = img.height;
+        if (w > maxWidth) {
+          h = (h * maxWidth) / w;
+          w = maxWidth;
+        }
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        callback(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
   // ===== SUMMARY PAGE =====
   function initSummaryPage() {
     document.getElementById('btn-quick-dose').addEventListener('click', () => openDoseModal());
     document.getElementById('btn-quick-weight').addEventListener('click', () => openWeightModal());
+
+    // Missed dose actions
+    document.getElementById('btn-log-overdue').addEventListener('click', () => openDoseModal());
+    document.getElementById('btn-log-missed').addEventListener('click', () => {
+      const stats = Store.getStats();
+      document.getElementById('missed-dose-date').value = stats.nextJabDate || new Date().toISOString().split('T')[0];
+      document.getElementById('missed-dose-reason').value = '';
+      openModal(document.getElementById('missed-dose-modal'));
+    });
+
     refreshSummary();
   }
 
   function refreshSummary() {
     const stats = Store.getStats();
     const unit = Store.getSettings().weightUnit;
+
+    // Streak & Milestones
+    const streakData = Store.getStreakData();
+    const milestones = Store.getMilestones();
+    const row = document.getElementById('streak-milestones-row');
+    const combinedStreak = Math.max(streakData.weightStreak, streakData.doseStreak);
+
+    if (combinedStreak > 0 || milestones.length > 0) {
+      row.style.display = 'flex';
+      const counter = document.getElementById('streak-counter');
+      if (combinedStreak > 0) {
+        counter.style.display = 'inline-flex';
+        document.getElementById('streak-value').textContent = combinedStreak;
+        document.getElementById('streak-label').textContent = combinedStreak === 1 ? 'week streak' : 'week streak';
+      } else {
+        counter.style.display = 'none';
+      }
+      const mRow = document.getElementById('milestones-row');
+      mRow.innerHTML = milestones.map((m, i) =>
+        '<span class="milestone-badge" style="animation-delay:' + (i * 0.1) + 's">' +
+        '<span class="milestone-badge-icon">' + m.icon + '</span>' +
+        m.label + '</span>'
+      ).join('');
+    } else {
+      row.style.display = 'none';
+    }
+
+    // Missed dose banner
+    const banner = document.getElementById('missed-dose-banner');
+    if (stats.nextJabDate) {
+      const diff = Math.ceil((new Date(stats.nextJabDate) - new Date()) / (1000 * 60 * 60 * 24));
+      if (diff < 0) {
+        banner.style.display = '';
+        document.getElementById('missed-dose-text').textContent = 'Dose overdue by ' + Math.abs(diff) + ' day(s)!';
+      } else {
+        banner.style.display = 'none';
+      }
+    } else {
+      banner.style.display = 'none';
+    }
 
     // Stats grid with animated counters
     if (stats.totalJabs > 0) {
@@ -289,11 +613,74 @@ const App = (() => {
       document.getElementById('sum-bmi').textContent = '--';
     }
 
+    // Projected goal date
+    const projDate = Store.getProjectedGoalDate();
+    const projCard = document.getElementById('projected-goal-card');
+    if (projDate) {
+      projCard.style.display = 'flex';
+      document.getElementById('projected-goal-text').textContent =
+        "At this rate, you'll reach your goal around " + formatDate(projDate) + '.';
+    } else {
+      projCard.style.display = 'none';
+    }
+
+    // Mini sparkline
+    renderSparkline();
+
     // Next dose ring
     renderDoseRing(stats);
 
     // Weight trend chart
     renderWeightSummaryChart();
+  }
+
+  function renderSparkline() {
+    const weights = Store.getWeights();
+    const card = document.getElementById('sparkline-card');
+    const canvas = document.getElementById('sparkline-canvas');
+    const changeEl = document.getElementById('sparkline-change');
+
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    const filtered = weights.filter(w => new Date(w.date) >= cutoff);
+
+    if (filtered.length < 2) {
+      card.style.display = 'none';
+      return;
+    }
+
+    card.style.display = '';
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+    const padding = 4;
+
+    ctx.clearRect(0, 0, w, h);
+
+    const values = filtered.map(x => parseFloat(x.weight));
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min || 1;
+
+    ctx.beginPath();
+    ctx.strokeStyle = getChartColors().primary;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+
+    values.forEach((v, i) => {
+      const x = padding + (i / (values.length - 1)) * (w - padding * 2);
+      const y = h - padding - ((v - min) / range) * (h - padding * 2);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Change label
+    const change = values[values.length - 1] - values[0];
+    const unit = Store.getSettings().weightUnit;
+    const sign = change > 0 ? '+' : '';
+    changeEl.textContent = sign + change.toFixed(1) + ' ' + unit;
+    changeEl.className = 'sparkline-change ' + (change > 0 ? 'positive' : 'negative');
   }
 
   function renderDoseRing(stats) {
@@ -304,11 +691,19 @@ const App = (() => {
     const ringValue = document.getElementById('dose-ring-value');
     const ringSub = document.getElementById('dose-ring-sub');
     const ringInfo = document.getElementById('dose-ring-info');
+    const detail = document.getElementById('dose-countdown-detail');
+
+    // Clear any existing countdown
+    if (countdownInterval) {
+      clearInterval(countdownInterval);
+      countdownInterval = null;
+    }
 
     if (!stats.nextJabDate) {
       ringValue.textContent = '--';
       ringSub.textContent = '';
       ringInfo.textContent = 'No doses logged yet';
+      detail.style.display = 'none';
       // Draw empty ring
       doseRingChart = new Chart(ctx, {
         type: 'doughnut',
@@ -329,19 +724,43 @@ const App = (() => {
       return;
     }
 
-    const diff = Math.ceil((new Date(stats.nextJabDate) - new Date()) / (1000 * 60 * 60 * 24));
-    const elapsed = 7 - diff;
-    const progress = Math.max(0, Math.min(1, elapsed / 7));
+    const profile = Store.getProfile();
+    const freq = profile.frequency || 'weekly';
+    const freqDays = { daily: 1, weekly: 7, biweekly: 14, monthly: 30 };
+    const cycleDays = freqDays[freq] || 7;
 
-    if (diff <= 0) {
-      ringValue.textContent = 'Due!';
-      ringSub.textContent = '';
-      ringInfo.textContent = 'Time for your next dose';
-    } else {
-      ringValue.textContent = diff;
-      ringSub.textContent = diff === 1 ? 'day' : 'days';
-      ringInfo.textContent = 'until next dose';
+    function updateCountdown() {
+      const now = new Date();
+      const target = new Date(stats.nextJabDate);
+      const diffMs = target - now;
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      const diffHours = Math.max(0, Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)));
+
+      if (diffMs <= 0) {
+        ringValue.textContent = 'Due!';
+        ringSub.textContent = '';
+        ringInfo.textContent = 'Time for your next dose';
+        detail.style.display = 'none';
+      } else if (diffDays <= 1) {
+        ringValue.textContent = diffHours;
+        ringSub.textContent = diffHours === 1 ? 'hour' : 'hours';
+        ringInfo.textContent = 'until next dose';
+        detail.style.display = 'block';
+        detail.textContent = 'Due ' + formatDate(stats.nextJabDate);
+      } else {
+        ringValue.textContent = diffDays;
+        ringSub.textContent = diffDays === 1 ? 'day' : 'days';
+        ringInfo.textContent = 'until next dose';
+        detail.style.display = 'block';
+        detail.textContent = diffDays + 'd ' + diffHours + 'h remaining';
+      }
     }
+    updateCountdown();
+    countdownInterval = setInterval(updateCountdown, 60000);
+
+    const diff = Math.ceil((new Date(stats.nextJabDate) - new Date()) / (1000 * 60 * 60 * 24));
+    const elapsed = cycleDays - Math.max(0, diff);
+    const progress = Math.max(0, Math.min(1, elapsed / cycleDays));
 
     doseRingChart = new Chart(ctx, {
       type: 'doughnut',
@@ -421,7 +840,7 @@ const App = (() => {
             padding: 12,
             displayColors: false,
             callbacks: {
-              label: (ctx) => ctx.parsed.y.toFixed(1) + ' ' + Store.getSettings().weightUnit,
+              label: (c) => c.parsed.y.toFixed(1) + ' ' + Store.getSettings().weightUnit,
             },
           },
         },
@@ -449,9 +868,9 @@ const App = (() => {
     document.getElementById('btn-add-dose').addEventListener('click', () => openDoseModal());
     document.getElementById('btn-first-dose').addEventListener('click', () => openDoseModal());
 
-    document.getElementById('dose-modal-close').addEventListener('click', () => doseModal.style.display = 'none');
-    document.getElementById('dose-form-cancel').addEventListener('click', () => doseModal.style.display = 'none');
-    doseModal.addEventListener('click', (e) => { if (e.target === doseModal) doseModal.style.display = 'none'; });
+    document.getElementById('dose-modal-close').addEventListener('click', () => closeModal(doseModal));
+    document.getElementById('dose-form-cancel').addEventListener('click', () => closeModal(doseModal));
+    doseModal.addEventListener('click', (e) => { if (e.target === doseModal) closeModal(doseModal); });
 
     doseForm.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -474,7 +893,7 @@ const App = (() => {
         Store.addJab(entry);
         toast('Dose logged!', 'success');
       }
-      doseModal.style.display = 'none';
+      closeModal(doseModal);
       refreshDoses();
       refreshSummary();
     });
@@ -518,11 +937,13 @@ const App = (() => {
       document.getElementById('dose-medication').value = profile.medication || 'semaglutide';
       document.getElementById('dose-amount').value = '';
       document.getElementById('dose-unit').value = 'mg';
-      document.getElementById('dose-site').value = '';
+      // Pre-select recommended site
+      const siteRec = Store.getNextRecommendedSite();
+      document.getElementById('dose-site').value = siteRec.recommended || '';
       document.getElementById('dose-notes').value = '';
       document.querySelectorAll('input[name="side-effect"]').forEach(cb => cb.checked = false);
     }
-    modal.style.display = 'flex';
+    openModal(modal);
   }
 
   function refreshDoses() {
@@ -542,33 +963,41 @@ const App = (() => {
       empty.style.display = '';
       list.innerHTML = '';
       chartContainer.style.display = 'none';
+      document.getElementById('site-rotation-card').style.display = 'none';
+      document.getElementById('side-effect-trends').style.display = 'none';
+      document.getElementById('escalation-section').style.display = 'none';
+      document.getElementById('dose-count').textContent = '0';
       return;
     }
 
     empty.style.display = 'none';
     chartContainer.style.display = '';
+    document.getElementById('dose-count').textContent = filtered.length;
 
     // Render dose list
     const sorted = [...filtered].reverse();
     list.innerHTML = sorted.map(j => `
       <div class="dose-item">
         <div class="dose-item-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 2l1.5 1.5L9 5"/><path d="M14 2l1.5 1.5L14 5"/><rect x="4" y="7" width="16" height="14" rx="2"/><path d="M12 11v6"/><path d="M9 14h6"/></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 2l1.5 1.5L9 5"/><path d="M14 2l1.5 1.5L14 5"/><rect x="4" y="7" width="16" height="14" rx="2"/><path d="M12 11v6"/><path d="M9 14h6"/></svg>
         </div>
         <div class="dose-item-info">
           <div class="dose-item-title">${medicationLabel(j.medication)}</div>
-          <div class="dose-item-sub">${formatDateShort(j.date)}${j.site ? ' &middot; ' + siteLabel(j.site) : ''}</div>
+          <div class="dose-item-sub">${formatDateShort(j.date)}${j.site ? ' &middot; ' + siteLabel(j.site) : ''}${j.notes && j.notes.startsWith('MISSED') ? ' &middot; <strong style="color:var(--warning)">Missed</strong>' : ''}</div>
         </div>
         <div class="dose-item-value">${j.dose} ${j.doseUnit}</div>
         <div class="dose-item-actions">
-          <button class="btn btn-ghost btn-sm" onclick="App.editDose('${j.id}')">Edit</button>
-          <button class="btn btn-ghost btn-sm" onclick="App.removeDose('${j.id}')">Del</button>
+          <button class="btn btn-ghost btn-sm" onclick="App.editDose('${j.id}')" aria-label="Edit dose">Edit</button>
+          <button class="btn btn-ghost btn-sm" onclick="App.removeDose('${j.id}')" aria-label="Delete dose">Del</button>
         </div>
       </div>
     `).join('');
 
     staggerListItems('#dose-list .dose-item');
     renderDoseChart(filtered);
+    renderSiteRotation();
+    renderSideEffectTrends();
+    renderDoseEscalation();
   }
 
   function renderDoseChart(jabs) {
@@ -615,7 +1044,7 @@ const App = (() => {
             padding: 12,
             displayColors: false,
             callbacks: {
-              label: (ctx) => ctx.parsed.y + ' ' + (jabs[ctx.dataIndex]?.doseUnit || 'mg'),
+              label: (c) => c.parsed.y + ' ' + (jabs[c.dataIndex]?.doseUnit || 'mg'),
             },
           },
         },
@@ -636,6 +1065,83 @@ const App = (() => {
     });
   }
 
+  function renderSiteRotation() {
+    const card = document.getElementById('site-rotation-card');
+    const jabs = Store.getJabs();
+    if (jabs.length === 0) {
+      card.style.display = 'none';
+      return;
+    }
+    card.style.display = '';
+    const data = Store.getNextRecommendedSite();
+    const allSites = ['abdomen-left', 'abdomen-right', 'thigh-left', 'thigh-right', 'arm-left', 'arm-right'];
+
+    allSites.forEach(s => {
+      const el = document.getElementById('site-' + s);
+      if (!el) return;
+      el.classList.remove('last-used', 'recommended');
+      if (s === data.lastSite) el.classList.add('last-used');
+      if (s === data.recommended) el.classList.add('recommended');
+    });
+
+    const rec = document.getElementById('site-recommendation');
+    rec.innerHTML = 'Last: <strong>' + siteLabel(data.lastSite) + '</strong> &middot; Recommended next: <strong>' + siteLabel(data.recommended) + '</strong>';
+  }
+
+  function renderSideEffectTrends() {
+    const container = document.getElementById('side-effect-trends');
+    const summary = document.getElementById('side-effect-summary');
+    const trends = Store.getSideEffectTrends();
+
+    const entries = Object.entries(trends.effectCounts);
+    if (entries.length === 0) {
+      container.style.display = 'none';
+      return;
+    }
+    container.style.display = '';
+
+    entries.sort((a, b) => b[1] - a[1]);
+    const maxCount = entries[0][1];
+
+    summary.innerHTML = entries.map(([effect, count]) => {
+      const pct = maxCount > 0 ? Math.round((count / maxCount) * 100) : 0;
+      const label = effect.replace('-', ' ');
+      return `
+        <div class="side-effect-bar-row">
+          <span class="side-effect-bar-label">${label}</span>
+          <div class="side-effect-bar-track">
+            <div class="side-effect-bar-fill" style="width:${pct}%"></div>
+          </div>
+          <span class="side-effect-bar-count">${count}/${trends.totalDoses}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderDoseEscalation() {
+    const section = document.getElementById('escalation-section');
+    const list = document.getElementById('escalation-list');
+    const escalations = Store.getDoseEscalations();
+
+    if (escalations.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = '';
+
+    list.innerHTML = escalations.reverse().map((e, i) => `
+      <div class="escalation-item ${e.direction}" style="animation-delay:${i * 0.05}s">
+        <div class="escalation-date">${formatDate(e.date)}</div>
+        <div class="escalation-detail">
+          ${e.fromDose} ${e.unit}
+          <span class="escalation-arrow">${e.direction === 'up' ? '&#x2191;' : '&#x2193;'}</span>
+          ${e.toDose} ${e.unit}
+          (${medicationLabel(e.medication)})
+        </div>
+      </div>
+    `).join('');
+  }
+
   function removeDose(id) {
     if (!confirm('Delete this dose entry?')) return;
     Store.deleteJab(id);
@@ -651,9 +1157,9 @@ const App = (() => {
 
     document.getElementById('btn-add-weight').addEventListener('click', () => openWeightModal());
 
-    document.getElementById('weight-modal-close').addEventListener('click', () => weightModal.style.display = 'none');
-    document.getElementById('weight-form-cancel').addEventListener('click', () => weightModal.style.display = 'none');
-    weightModal.addEventListener('click', (e) => { if (e.target === weightModal) weightModal.style.display = 'none'; });
+    document.getElementById('weight-modal-close').addEventListener('click', () => closeModal(weightModal));
+    document.getElementById('weight-form-cancel').addEventListener('click', () => closeModal(weightModal));
+    weightModal.addEventListener('click', (e) => { if (e.target === weightModal) closeModal(weightModal); });
 
     weightForm.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -670,7 +1176,7 @@ const App = (() => {
         Store.addWeight(entry);
         toast('Weight logged!', 'success');
       }
-      weightModal.style.display = 'none';
+      closeModal(weightModal);
       refreshProgress();
       refreshSummary();
     });
@@ -684,6 +1190,28 @@ const App = (() => {
         refreshProgress();
       });
     });
+
+    // Photo & NSV buttons
+    document.getElementById('btn-add-photo').addEventListener('click', () => {
+      document.getElementById('photo-date').value = new Date().toISOString().split('T')[0];
+      document.getElementById('photo-note').value = '';
+      document.getElementById('photo-file').value = '';
+      openModal(document.getElementById('photo-modal'));
+    });
+
+    document.getElementById('btn-add-nsv').addEventListener('click', () => {
+      document.getElementById('nsv-date').value = new Date().toISOString().split('T')[0];
+      document.getElementById('nsv-text').value = '';
+      document.getElementById('nsv-category').value = 'fitness';
+      openModal(document.getElementById('nsv-modal'));
+    });
+
+    // Share card button
+    document.getElementById('btn-share-card').addEventListener('click', generateShareCard);
+
+    // Photo compare selects
+    document.getElementById('photo-compare-left').addEventListener('change', updatePhotoCompare);
+    document.getElementById('photo-compare-right').addEventListener('change', updatePhotoCompare);
 
     updateWeightUnitLabels();
   }
@@ -707,7 +1235,7 @@ const App = (() => {
       document.getElementById('weight-value').value = '';
       document.getElementById('weight-note').value = '';
     }
-    modal.style.display = 'flex';
+    openModal(modal);
   }
 
   function updateWeightUnitLabels() {
@@ -762,6 +1290,18 @@ const App = (() => {
     // Weight count
     document.getElementById('weight-count').textContent = weights.length;
 
+    // Rate of loss
+    const rateCard = document.getElementById('rate-of-loss-card');
+    const rate30 = Store.getRateOfLoss(30);
+    if (rate30 !== null && rate30 !== 0) {
+      rateCard.style.display = 'flex';
+      const sign = rate30 > 0 ? '-' : '+';
+      document.getElementById('rate-of-loss-text').textContent =
+        sign + Math.abs(rate30).toFixed(1) + ' ' + unit + '/week this month';
+    } else {
+      rateCard.style.display = 'none';
+    }
+
     // Filter weights
     let filtered = weights;
     if (currentProgressRange !== 'all') {
@@ -775,6 +1315,16 @@ const App = (() => {
 
     // Weight entries list
     renderWeightEntries(filtered);
+
+    // Photos
+    renderPhotoGallery();
+
+    // NSVs
+    renderNSVList();
+
+    // Share button visibility
+    const shareBtn = document.getElementById('btn-share-card');
+    shareBtn.style.display = weights.length >= 2 ? '' : 'none';
   }
 
   function renderWeightFullChart(weights) {
@@ -803,6 +1353,27 @@ const App = (() => {
       pointBackgroundColor: colors.primary,
     }];
 
+    // 4-week moving average line
+    const movingAvg = Store.getMovingAverage(28);
+    if (movingAvg.length >= 2) {
+      const filteredAvg = movingAvg.filter(ma => {
+        return weights.some(w => w.date === ma.date);
+      });
+      if (filteredAvg.length >= 2) {
+        datasets.push({
+          label: '4-Week Avg',
+          data: filteredAvg.map(ma => ({ x: ma.date, y: ma.avg })),
+          borderColor: colors.success,
+          borderWidth: 2,
+          borderDash: [4, 4],
+          pointRadius: 0,
+          fill: false,
+          tension: 0.4,
+        });
+      }
+    }
+
+    // Goal line
     if (goals.targetWeight) {
       datasets.push({
         label: 'Goal',
@@ -815,6 +1386,40 @@ const App = (() => {
       });
     }
 
+    // Healthy weight range band (BMI 18.5-25)
+    const profile = Store.getProfile();
+    if (profile.height) {
+      let heightM = parseFloat(profile.height) / 100;
+      if (profile.heightUnit === 'ft') {
+        heightM = parseFloat(profile.height) * 0.3048;
+      }
+      if (heightM > 0) {
+        let healthyLow = 18.5 * heightM * heightM;
+        let healthyHigh = 25 * heightM * heightM;
+        const unit = Store.getSettings().weightUnit;
+        if (unit === 'lbs') { healthyLow /= 0.453592; healthyHigh /= 0.453592; }
+        else if (unit === 'st') { healthyLow /= 6.35029; healthyHigh /= 6.35029; }
+
+        datasets.push({
+          label: 'Healthy Range (High)',
+          data: weights.map(w => ({ x: w.date, y: Math.round(healthyHigh * 10) / 10 })),
+          borderColor: 'rgba(16,185,129,0.2)',
+          borderWidth: 0,
+          pointRadius: 0,
+          fill: '+1',
+          backgroundColor: 'rgba(16,185,129,0.08)',
+        });
+        datasets.push({
+          label: 'Healthy Range (Low)',
+          data: weights.map(w => ({ x: w.date, y: Math.round(healthyLow * 10) / 10 })),
+          borderColor: 'rgba(16,185,129,0.2)',
+          borderWidth: 0,
+          pointRadius: 0,
+          fill: false,
+        });
+      }
+    }
+
     weightFullChart = new Chart(ctx, {
       type: 'line',
       data: { datasets },
@@ -824,7 +1429,14 @@ const App = (() => {
         animation: { duration: 800, easing: 'easeOutQuart' },
         interaction: { intersect: false, mode: 'index' },
         plugins: {
-          legend: { display: !!goals.targetWeight, labels: { color: colors.textMuted, font: { size: 10 } } },
+          legend: {
+            display: true,
+            labels: {
+              color: colors.textMuted,
+              font: { size: 10 },
+              filter: (item) => !item.text.startsWith('Healthy'),
+            },
+          },
           tooltip: {
             backgroundColor: 'rgba(15,23,42,0.9)',
             titleColor: '#f1f5f9',
@@ -834,8 +1446,9 @@ const App = (() => {
             cornerRadius: 10,
             padding: 12,
             displayColors: false,
+            filter: (item) => !item.dataset.label.startsWith('Healthy'),
             callbacks: {
-              label: (ctx) => ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(1) + ' ' + Store.getSettings().weightUnit,
+              label: (c) => c.dataset.label + ': ' + c.parsed.y.toFixed(1) + ' ' + Store.getSettings().weightUnit,
             },
           },
         },
@@ -869,7 +1482,7 @@ const App = (() => {
 
     empty.style.display = 'none';
     const sorted = [...weights].reverse();
-    list.innerHTML = sorted.map((w, i) => {
+    list.innerHTML = sorted.map((w) => {
       const globalIdx = allWeights.findIndex(x => x.id === w.id);
       let changeHtml = '';
       if (globalIdx > 0) {
@@ -885,13 +1498,111 @@ const App = (() => {
             <div class="weight-item-value">${parseFloat(w.weight).toFixed(1)} ${unit} ${changeHtml}</div>
           </div>
           <div style="display:flex;gap:4px;">
-            <button class="btn btn-ghost btn-sm" onclick="App.editWeight('${w.id}')">Edit</button>
-            <button class="btn btn-ghost btn-sm" onclick="App.removeWeight('${w.id}')">Del</button>
+            <button class="btn btn-ghost btn-sm" onclick="App.editWeight('${w.id}')" aria-label="Edit weight entry">Edit</button>
+            <button class="btn btn-ghost btn-sm" onclick="App.removeWeight('${w.id}')" aria-label="Delete weight entry">Del</button>
           </div>
         </div>
       `;
     }).join('');
     staggerListItems('#weight-entries-list .weight-item');
+  }
+
+  function renderPhotoGallery() {
+    const photos = Store.getPhotos();
+    const gallery = document.getElementById('photo-gallery');
+    const empty = document.getElementById('photo-empty');
+
+    if (photos.length === 0) {
+      gallery.innerHTML = '';
+      empty.style.display = '';
+      return;
+    }
+    empty.style.display = 'none';
+
+    gallery.innerHTML = [...photos].reverse().map(p => `
+      <div class="photo-thumb" onclick="App.viewPhotos()">
+        <img src="${p.dataUrl}" alt="Progress photo ${formatDateShort(p.date)}" loading="lazy">
+        <span class="photo-thumb-date">${formatDateShort(p.date)}</span>
+        <button class="photo-thumb-delete" onclick="event.stopPropagation();App.removePhoto('${p.id}')" aria-label="Delete photo">&times;</button>
+      </div>
+    `).join('');
+  }
+
+  function viewPhotos() {
+    const photos = Store.getPhotos();
+    if (photos.length === 0) return;
+
+    const leftSel = document.getElementById('photo-compare-left');
+    const rightSel = document.getElementById('photo-compare-right');
+
+    const options = photos.map(p =>
+      '<option value="' + p.id + '">' + formatDateShort(p.date) + (p.note ? ' - ' + p.note : '') + '</option>'
+    ).join('');
+
+    leftSel.innerHTML = options;
+    rightSel.innerHTML = options;
+
+    // Default: first and last
+    if (photos.length >= 2) {
+      leftSel.value = photos[0].id;
+      rightSel.value = photos[photos.length - 1].id;
+    }
+
+    updatePhotoCompare();
+    openModal(document.getElementById('photo-viewer-modal'));
+  }
+
+  function updatePhotoCompare() {
+    const photos = Store.getPhotos();
+    const leftId = document.getElementById('photo-compare-left').value;
+    const rightId = document.getElementById('photo-compare-right').value;
+    const leftFrame = document.getElementById('photo-frame-left');
+    const rightFrame = document.getElementById('photo-frame-right');
+
+    const leftPhoto = photos.find(p => p.id === leftId);
+    const rightPhoto = photos.find(p => p.id === rightId);
+
+    leftFrame.innerHTML = leftPhoto ? '<img src="' + leftPhoto.dataUrl + '" alt="Left comparison photo">' : 'No photo';
+    rightFrame.innerHTML = rightPhoto ? '<img src="' + rightPhoto.dataUrl + '" alt="Right comparison photo">' : 'No photo';
+  }
+
+  function removePhoto(id) {
+    if (!confirm('Delete this photo?')) return;
+    Store.deletePhoto(id);
+    toast('Photo deleted');
+    renderPhotoGallery();
+  }
+
+  function renderNSVList() {
+    const victories = Store.getVictories();
+    const list = document.getElementById('nsv-list');
+    const empty = document.getElementById('nsv-empty');
+
+    if (victories.length === 0) {
+      list.innerHTML = '';
+      empty.style.display = '';
+      return;
+    }
+    empty.style.display = 'none';
+
+    list.innerHTML = [...victories].reverse().map(v => `
+      <div class="nsv-item">
+        <div class="nsv-category-icon">${nsvCategoryIcon(v.category)}</div>
+        <div class="nsv-content">
+          <div class="nsv-text">${v.text}</div>
+          <div class="nsv-meta">${formatDateShort(v.date)} &middot; ${v.category}</div>
+        </div>
+        <button class="nsv-delete" onclick="App.removeVictory('${v.id}')" aria-label="Delete victory">&times;</button>
+      </div>
+    `).join('');
+    staggerListItems('#nsv-list .nsv-item');
+  }
+
+  function removeVictory(id) {
+    if (!confirm('Delete this entry?')) return;
+    Store.deleteVictory(id);
+    toast('Entry deleted');
+    renderNSVList();
   }
 
   function removeWeight(id) {
@@ -902,11 +1613,87 @@ const App = (() => {
     refreshSummary();
   }
 
+  // ===== SHARE CARD =====
+  function generateShareCard() {
+    const stats = Store.getStats();
+    const unit = Store.getSettings().weightUnit;
+    const canvas = document.getElementById('share-card-canvas');
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#6366f1';
+    ctx.fillRect(0, 0, 600, 400);
+
+    // Overlay pattern
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    for (let i = 0; i < 20; i++) {
+      ctx.fillRect(i * 40, 0, 2, 400);
+    }
+
+    // Title
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 32px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('My Weight Loss Progress', 300, 60);
+
+    // Divider
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(100, 80);
+    ctx.lineTo(500, 80);
+    ctx.stroke();
+
+    // Big number
+    const lost = stats.totalLost ? stats.totalLost.toFixed(1) : '0';
+    ctx.font = 'bold 72px Inter, sans-serif';
+    ctx.fillText(lost + ' ' + unit, 300, 170);
+
+    ctx.font = '24px Inter, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.fillText('lost so far', 300, 205);
+
+    // Stats row
+    ctx.font = 'bold 20px Inter, sans-serif';
+    ctx.fillStyle = '#ffffff';
+    const col1 = 150, col2 = 300, col3 = 450;
+    const row = 270;
+
+    ctx.fillText(stats.totalJabs + ' doses', col1, row);
+    ctx.fillText(stats.daysOnPlan + ' days', col2, row);
+    ctx.fillText(stats.progressPercent.toFixed(0) + '% done', col3, row);
+
+    ctx.font = '14px Inter, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.fillText('logged', col1, row + 22);
+    ctx.fillText('on plan', col2, row + 22);
+    ctx.fillText('to goal', col3, row + 22);
+
+    // Footer
+    ctx.font = '14px Inter, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillText('Tracked with Jab It', 300, 370);
+
+    openModal(document.getElementById('share-modal'));
+  }
+
+  function downloadShareCard() {
+    const canvas = document.getElementById('share-card-canvas');
+    canvas.toBlob((blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'progress-card-' + new Date().toISOString().split('T')[0] + '.png';
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('Card downloaded!', 'success');
+    });
+  }
+
   // ===== SETTINGS PAGE =====
   function initSettingsPage() {
     document.getElementById('btn-save-settings').addEventListener('click', () => saveAllSettings());
 
-    // Export
+    // Export JSON
     document.getElementById('btn-export').addEventListener('click', () => {
       const data = Store.exportData();
       const blob = new Blob([data], { type: 'application/json' });
@@ -917,6 +1704,19 @@ const App = (() => {
       a.click();
       URL.revokeObjectURL(url);
       toast('Data exported!', 'success');
+    });
+
+    // Export CSV
+    document.getElementById('btn-export-csv').addEventListener('click', () => {
+      const csv = Store.exportCSV();
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'weight-tracker-' + new Date().toISOString().split('T')[0] + '.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('CSV exported!', 'success');
     });
 
     // Import
@@ -941,6 +1741,49 @@ const App = (() => {
       e.target.value = '';
     });
 
+    // Copy backup link
+    document.getElementById('btn-copy-backup').addEventListener('click', () => {
+      const encoded = Store.generateBackupLink();
+      if (!encoded) {
+        toast('Failed to generate backup', 'error');
+        return;
+      }
+      const link = window.location.origin + window.location.pathname + '?restore=' + encoded;
+      if (link.length > 50000) {
+        toast('Data too large for URL backup. Use JSON export instead.', 'error');
+        return;
+      }
+      navigator.clipboard.writeText(link).then(() => {
+        toast('Backup link copied!', 'success');
+      }).catch(() => {
+        // Fallback
+        const ta = document.createElement('textarea');
+        ta.value = link;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        toast('Backup link copied!', 'success');
+      });
+    });
+
+    // Paste backup link
+    document.getElementById('btn-paste-backup').addEventListener('click', () => {
+      const input = prompt('Paste your backup link or backup data:');
+      if (!input) return;
+      let encoded = input;
+      if (input.includes('?restore=')) {
+        encoded = input.split('?restore=')[1];
+      }
+      if (Store.importFromBackupLink(encoded)) {
+        toast('Data restored!', 'success');
+        bootApp();
+        navigateTo('summary');
+      } else {
+        toast('Invalid backup link.', 'error');
+      }
+    });
+
     // Clear data
     document.getElementById('btn-clear-data').addEventListener('click', () => {
       if (!confirm('Are you sure you want to delete ALL data? This cannot be undone.')) return;
@@ -949,6 +1792,42 @@ const App = (() => {
       toast('All data cleared');
       window.location.reload();
     });
+
+    // Test notification
+    document.getElementById('btn-test-notification').addEventListener('click', () => {
+      if (!('Notification' in window)) {
+        toast('Notifications not supported in this browser', 'error');
+        return;
+      }
+      if (Notification.permission === 'granted') {
+        new Notification('Jab It - Test', { body: 'Notifications are working!', icon: 'icons/icon-192.png' });
+        toast('Test notification sent!', 'success');
+      } else if (Notification.permission === 'denied') {
+        toast('Notifications blocked. Check browser settings.', 'error');
+      } else {
+        Notification.requestPermission().then(perm => {
+          if (perm === 'granted') {
+            new Notification('Jab It - Test', { body: 'Notifications are working!', icon: 'icons/icon-192.png' });
+            toast('Notifications enabled!', 'success');
+          } else {
+            toast('Notification permission denied.', 'error');
+          }
+        });
+      }
+    });
+
+    // Check for restore param on load
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('restore')) {
+      const encoded = params.get('restore');
+      if (Store.importFromBackupLink(encoded)) {
+        toast('Data restored from link!', 'success');
+        // Clean URL
+        window.history.replaceState({}, '', window.location.pathname);
+        bootApp();
+        navigateTo('summary');
+      }
+    }
   }
 
   function saveAllSettings() {
@@ -958,6 +1837,8 @@ const App = (() => {
     profile.heightUnit = document.getElementById('set-height-unit').value;
     profile.startWeight = document.getElementById('set-start-weight').value;
     profile.medication = document.getElementById('set-medication').value;
+    profile.dosage = document.getElementById('set-dosage').value;
+    profile.frequency = document.getElementById('set-frequency').value;
     Store.saveProfile(profile);
 
     const goals = Store.getGoals();
@@ -965,13 +1846,31 @@ const App = (() => {
     Store.saveGoals(goals);
 
     const settings = Store.getSettings();
-    settings.weightUnit = document.getElementById('set-weight-unit').value;
+    const oldUnit = settings.weightUnit;
+    const newUnit = document.getElementById('set-weight-unit').value;
+
+    settings.weightUnit = newUnit;
+    settings.theme = document.getElementById('set-theme').value;
+    settings.weighInSchedule = document.getElementById('set-weigh-schedule').value;
+    settings.doseReminderEnabled = document.getElementById('set-dose-reminder').checked;
+    settings.weighInReminderEnabled = document.getElementById('set-weighin-reminder').checked;
     Store.saveSettings(settings);
 
-    // Save dosage and frequency to profile
-    profile.dosage = document.getElementById('set-dosage').value;
-    profile.frequency = document.getElementById('set-frequency').value;
-    Store.saveProfile(profile);
+    // Auto-convert weights on unit change
+    if (oldUnit !== newUnit) {
+      Store.convertAllWeights(oldUnit, newUnit);
+      // Update display values
+      const newProfile = Store.getProfile();
+      document.getElementById('set-start-weight').value = newProfile.startWeight || '';
+      const newGoals = Store.getGoals();
+      document.getElementById('set-goal-weight').value = newGoals.targetWeight || '';
+      toast('All weights converted to ' + newUnit + '!', 'success');
+    }
+
+    // Request notification permission if reminders enabled
+    if ((settings.doseReminderEnabled || settings.weighInReminderEnabled) && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
 
     applyTheme();
     updateWeightUnitLabels();
@@ -992,6 +1891,10 @@ const App = (() => {
     document.getElementById('set-medication').value = profile.medication || 'semaglutide';
     document.getElementById('set-dosage').value = profile.dosage || '';
     document.getElementById('set-frequency').value = profile.frequency || 'weekly';
+    document.getElementById('set-theme').value = settings.theme || 'light';
+    document.getElementById('set-weigh-schedule').value = settings.weighInSchedule || 'weekly';
+    document.getElementById('set-dose-reminder').checked = !!settings.doseReminderEnabled;
+    document.getElementById('set-weighin-reminder').checked = !!settings.weighInReminderEnabled;
 
     updateWeightUnitLabels();
   }
@@ -1003,6 +1906,9 @@ const App = (() => {
     removeWeight,
     editDose: (id) => openDoseModal(id),
     removeDose,
+    removePhoto,
+    removeVictory,
+    viewPhotos,
   };
 })();
 

@@ -1,0 +1,26 @@
+{
+  "name": "Jab It: Weight Loss Tracker",
+  "short_name": "Jab It",
+  "description": "Track your weight loss journey and GLP-1 medication doses",
+  "start_url": "/Weight-Tracker/",
+  "scope": "/Weight-Tracker/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#6366f1",
+  "orientation": "portrait",
+  "categories": ["health", "fitness", "medical"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
