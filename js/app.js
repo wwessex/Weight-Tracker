@@ -1838,8 +1838,13 @@ const App = (() => {
       if (!file) return;
       const reader = new FileReader();
       reader.onload = (ev) => {
-        if (Store.importData(ev.target.result)) {
-          toast('Data imported!', 'success');
+        const importResult = Store.importData(ev.target.result);
+        if (importResult.success) {
+          if (importResult.warnings > 0) {
+            toast('Data imported with ' + importResult.warnings + ' skipped invalid row(s).', 'success');
+          } else {
+            toast('Data imported!', 'success');
+          }
           bootApp();
           navigateTo('summary');
         } else {
@@ -1884,8 +1889,13 @@ const App = (() => {
       if (input.includes('?restore=')) {
         encoded = input.split('?restore=')[1];
       }
-      if (Store.importFromBackupLink(encoded)) {
-        toast('Data restored!', 'success');
+      const importResult = Store.importFromBackupLink(encoded);
+      if (importResult.success) {
+        if (importResult.warnings > 0) {
+          toast('Data restored with ' + importResult.warnings + ' skipped invalid row(s).', 'success');
+        } else {
+          toast('Data restored!', 'success');
+        }
         bootApp();
         navigateTo('summary');
       } else {
@@ -1934,8 +1944,13 @@ const App = (() => {
     const params = new URLSearchParams(window.location.search);
     if (params.has('restore')) {
       const encoded = params.get('restore');
-      if (Store.importFromBackupLink(encoded)) {
-        toast('Data restored from link!', 'success');
+      const importResult = Store.importFromBackupLink(encoded);
+      if (importResult.success) {
+        if (importResult.warnings > 0) {
+          toast('Data restored from link with ' + importResult.warnings + ' skipped invalid row(s).', 'success');
+        } else {
+          toast('Data restored from link!', 'success');
+        }
         // Clean URL
         window.history.replaceState({}, '', window.location.pathname);
         bootApp();
