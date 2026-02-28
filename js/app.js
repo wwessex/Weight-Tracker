@@ -1747,6 +1747,14 @@ const App = (() => {
   function initSettingsPage() {
     document.getElementById('btn-save-settings').addEventListener('click', () => saveAllSettings());
 
+    // Live theme preview in settings
+    document.getElementById('set-theme').addEventListener('change', (e) => {
+      const settings = Store.getSettings();
+      settings.theme = e.target.value;
+      Store.saveSettings(settings);
+      applyTheme();
+    });
+
     // Export JSON
     document.getElementById('btn-export').addEventListener('click', () => {
       const data = Store.exportData();
