@@ -1315,6 +1315,15 @@ const App = (() => {
     document.getElementById('photo-compare-right').addEventListener('change', updatePhotoCompare);
 
     updateWeightUnitLabels();
+
+    const linkExportButton = document.getElementById('btn-export-link') || document.getElementById('btn-copy-backup');
+    if (linkExportButton) {
+      const size = Store.getBackupSizeInfo();
+      linkExportButton.disabled = size.exceedsSafeLink;
+      linkExportButton.title = size.exceedsSafeLink
+        ? 'Backup too large for a safe URL. Export and share a backup file instead.'
+        : 'Create a full restore backup link';
+    }
   }
 
   function openWeightModal(id) {
@@ -1792,6 +1801,84 @@ const App = (() => {
 
   // ===== SETTINGS PAGE =====
   function initSettingsPage() {
+    const linkExportButton = document.getElementById('btn-export-link') || document.getElementById('btn-copy-backup');
+
+    function triggerDownload(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    async function buildCompressedBackupBlob(jsonPayload) {
+      if (typeof CompressionStream === 'undefined') return null;
+      const stream = new Blob([jsonPayload], { type: 'application/json' }).stream().pipeThrough(new CompressionStream('gzip'));
+      return new Response(stream).blob();
+    }
+
+    async function exportBackupFile(preferCompressed, largePayloadFallback) {
+      const data = Store.exportData();
+      const dateStamp = new Date().toISOString().split('T')[0];
+      try {
+        if (preferCompressed) {
+          const compressedBlob = await buildCompressedBackupBlob(data);
+          if (compressedBlob) {
+            triggerDownload(compressedBlob, 'jabit-backup-' + dateStamp + '.json.gz');
+            toast(largePayloadFallback ? 'Backup too large for link; file export created instead.' : 'Compressed backup exported!', 'success');
+            return;
+          }
+        }
+        triggerDownload(new Blob([data], { type: 'application/json' }), 'jabit-backup-' + dateStamp + '.json');
+        toast(largePayloadFallback ? 'Backup too large for link; file export created instead.' : 'Backup file exported!', 'success');
+      } catch {
+        toast('Backup export failed. Please try again.', 'error');
+      }
+    }
+
+    function copyText(text, successMessage) {
+      navigator.clipboard.writeText(text).then(() => {
+        toast(successMessage, 'success');
+      }).catch(() => {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        toast(successMessage, 'success');
+      });
+    }
+
+    function updateBackupLinkState() {
+      if (!linkExportButton) return;
+      const size = Store.getBackupSizeInfo();
+      linkExportButton.disabled = size.exceedsSafeLink;
+      linkExportButton.title = size.exceedsSafeLink
+        ? 'Backup too large for a safe URL. Export and share a backup file instead.'
+        : 'Create a full restore backup link';
+    }
+
+    function importFromEncodedPayload(encoded, fromRestoreParam) {
+      const importResult = Store.importFromBackupLink(encoded);
+      if (importResult.success) {
+        if (importResult.warnings > 0) {
+          toast('Data restored' + (fromRestoreParam ? ' from link' : '') + ' with ' + importResult.warnings + ' skipped invalid row(s).', 'success');
+        } else {
+          toast('Data restored' + (fromRestoreParam ? ' from link' : '') + '!', 'success');
+        }
+        bootApp();
+        navigateTo('summary');
+        return;
+      }
+      if (importResult.metadataOnly) {
+        toast('This is a metadata-only link. Ask for the backup file to fully restore data.', 'error');
+        return;
+      }
+      toast('Invalid backup link.', 'error');
+    }
+
     document.getElementById('btn-save-settings').addEventListener('click', () => saveAllSettings());
 
     // Live theme preview in settings
@@ -1802,29 +1889,15 @@ const App = (() => {
       applyTheme();
     });
 
-    // Export JSON
+    // Export backup file (JSON canonical payload, compressed when available)
     document.getElementById('btn-export').addEventListener('click', () => {
-      const data = Store.exportData();
-      const blob = new Blob([data], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'weight-tracker-backup-' + new Date().toISOString().split('T')[0] + '.json';
-      a.click();
-      URL.revokeObjectURL(url);
-      toast('Data exported!', 'success');
+      exportBackupFile(true, false);
     });
 
     // Export CSV
     document.getElementById('btn-export-csv').addEventListener('click', () => {
       const csv = Store.exportCSV();
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'weight-tracker-' + new Date().toISOString().split('T')[0] + '.csv';
-      a.click();
-      URL.revokeObjectURL(url);
+      triggerDownload(new Blob([csv], { type: 'text/csv' }), 'weight-tracker-' + new Date().toISOString().split('T')[0] + '.csv');
       toast('CSV exported!', 'success');
     });
 
@@ -1833,12 +1906,24 @@ const App = (() => {
       document.getElementById('import-file').click();
     });
 
-    document.getElementById('import-file').addEventListener('change', (e) => {
+    document.getElementById('import-file').addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const importResult = Store.importData(ev.target.result);
+
+      async function readBackupFile(fileToRead) {
+        if (fileToRead.name.endsWith('.gz')) {
+          if (typeof DecompressionStream === 'undefined') {
+            throw new Error('compressed-not-supported');
+          }
+          const stream = fileToRead.stream().pipeThrough(new DecompressionStream('gzip'));
+          return new Response(stream).text();
+        }
+        return fileToRead.text();
+      }
+
+      try {
+        const content = await readBackupFile(file);
+        const importResult = Store.importData(content);
         if (importResult.success) {
           if (importResult.warnings > 0) {
             toast('Data imported with ' + importResult.warnings + ' skipped invalid row(s).', 'success');
@@ -1847,61 +1932,59 @@ const App = (() => {
           }
           bootApp();
           navigateTo('summary');
+          updateBackupLinkState();
         } else {
           toast('Import failed. Invalid file.', 'error');
         }
-      };
-      reader.readAsText(file);
+      } catch (err) {
+        if (err && err.message === 'compressed-not-supported') {
+          toast('Compressed backup import is not supported in this browser. Use .json backup file.', 'error');
+        } else {
+          toast('Import failed. Invalid file.', 'error');
+        }
+      }
+
       e.target.value = '';
     });
 
-    // Copy backup link
-    document.getElementById('btn-copy-backup').addEventListener('click', () => {
-      const encoded = Store.generateBackupLink();
-      if (!encoded) {
-        toast('Failed to generate backup', 'error');
-        return;
-      }
-      const link = window.location.origin + window.location.pathname + '?restore=' + encoded;
-      if (link.length > 50000) {
-        toast('Data too large for URL backup. Use JSON export instead.', 'error');
-        return;
-      }
-      navigator.clipboard.writeText(link).then(() => {
-        toast('Backup link copied!', 'success');
-      }).catch(() => {
-        // Fallback
-        const ta = document.createElement('textarea');
-        ta.value = link;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-        toast('Backup link copied!', 'success');
+    // Export/copy backup link
+    if (linkExportButton) {
+      linkExportButton.addEventListener('click', () => {
+        const size = Store.getBackupSizeInfo();
+
+        if (size.exceedsSafeLink) {
+          exportBackupFile(true, true);
+          const metadataEncoded = Store.generateMetadataBackupLink();
+          if (metadataEncoded) {
+            const metadataLink = window.location.origin + window.location.pathname + '?restore=' + metadataEncoded;
+            copyText(metadataLink, 'Metadata-only link copied. Share backup file for full restore.');
+          }
+          return;
+        }
+
+        const encoded = Store.generateBackupLink();
+        if (!encoded) {
+          toast('Failed to generate backup link.', 'error');
+          return;
+        }
+
+        const link = window.location.origin + window.location.pathname + '?restore=' + encoded;
+        copyText(link, 'Backup link copied!');
       });
-    });
+    }
 
     // Paste backup link
     document.getElementById('btn-paste-backup').addEventListener('click', () => {
-      const input = prompt('Paste your backup link or backup data:');
+      const input = prompt('Paste your backup link. For full restore, use a backup file export.');
       if (!input) return;
       let encoded = input;
       if (input.includes('?restore=')) {
         encoded = input.split('?restore=')[1];
       }
-      const importResult = Store.importFromBackupLink(encoded);
-      if (importResult.success) {
-        if (importResult.warnings > 0) {
-          toast('Data restored with ' + importResult.warnings + ' skipped invalid row(s).', 'success');
-        } else {
-          toast('Data restored!', 'success');
-        }
-        bootApp();
-        navigateTo('summary');
-      } else {
-        toast('Invalid backup link.', 'error');
-      }
+      importFromEncodedPayload(encoded, false);
     });
+
+    updateBackupLinkState();
 
     // Clear data
     document.getElementById('btn-clear-data').addEventListener('click', () => {
@@ -1944,18 +2027,9 @@ const App = (() => {
     const params = new URLSearchParams(window.location.search);
     if (params.has('restore')) {
       const encoded = params.get('restore');
-      const importResult = Store.importFromBackupLink(encoded);
-      if (importResult.success) {
-        if (importResult.warnings > 0) {
-          toast('Data restored from link with ' + importResult.warnings + ' skipped invalid row(s).', 'success');
-        } else {
-          toast('Data restored from link!', 'success');
-        }
-        // Clean URL
-        window.history.replaceState({}, '', window.location.pathname);
-        bootApp();
-        navigateTo('summary');
-      }
+      importFromEncodedPayload(encoded, true);
+      // Clean URL
+      window.history.replaceState({}, '', window.location.pathname);
     }
   }
 
