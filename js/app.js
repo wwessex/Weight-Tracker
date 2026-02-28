@@ -4,9 +4,12 @@ const App = (() => {
   let currentProgressRange = 'all';
   let currentDoseRange = 'all';
   let countdownInterval = null;
+  let remindersInterval = null;
+  const REMINDER_CHECK_INTERVAL_MS = 30 * 60 * 1000;
 
   // ===== INIT =====
   function init() {
+    window.addEventListener('beforeunload', teardownReminderChecks);
     const profile = Store.getProfile();
     if (!profile.name) {
       document.getElementById('onboarding-modal').style.display = 'flex';
@@ -21,6 +24,7 @@ const App = (() => {
   }
 
   function bootApp() {
+    teardownReminderChecks();
     applyTheme();
     initNavigation();
     initSummaryPage();
@@ -37,6 +41,21 @@ const App = (() => {
     }
     // Schedule reminder checks
     checkReminders();
+    scheduleReminderChecks();
+  }
+
+  function teardownReminderChecks() {
+    if (remindersInterval) {
+      clearInterval(remindersInterval);
+      remindersInterval = null;
+    }
+  }
+
+  function scheduleReminderChecks() {
+    teardownReminderChecks();
+    const settings = Store.getSettings();
+    if (!settings.doseReminderEnabled && !settings.weighInReminderEnabled) return;
+    remindersInterval = setInterval(checkReminders, REMINDER_CHECK_INTERVAL_MS);
   }
 
   // ===== PWA SERVICE WORKER =====
@@ -433,13 +452,32 @@ const App = (() => {
     }
   }
 
+  function getReminderDedupState() {
+    const settings = Store.getSettings();
+    if (!settings.reminderDedup || typeof settings.reminderDedup !== 'object') {
+      settings.reminderDedup = {};
+      Store.saveSettings(settings);
+    }
+    return { settings, dedup: settings.reminderDedup };
+  }
+
+  function shouldSendReminder(type, dedupKey) {
+    const { settings, dedup } = getReminderDedupState();
+    if (dedup[type] === dedupKey) return false;
+    dedup[type] = dedupKey;
+    settings.reminderDedup = dedup;
+    Store.saveSettings(settings);
+    return true;
+  }
+
   function checkReminders() {
     const settings = Store.getSettings();
-    if (!settings.doseReminderEnabled && !settings.weighInReminderEnabled) return;
-
-    // Clear any existing banners
     var container = document.getElementById('reminder-banners');
     if (container) container.innerHTML = '';
+
+    if (!settings.doseReminderEnabled && !settings.weighInReminderEnabled) return;
+
+    const today = new Date().toISOString().split('T')[0];
 
     const stats = Store.getStats();
 
@@ -447,9 +485,15 @@ const App = (() => {
     if (settings.doseReminderEnabled && stats.nextJabDate) {
       const diff = Math.ceil((new Date(stats.nextJabDate) - new Date()) / (1000 * 60 * 60 * 24));
       if (diff === 0) {
-        sendReminder('Jab It - Dose Reminder', 'Your dose is due today!', 'dose');
+        const dedupKey = today + '|due';
+        if (shouldSendReminder('dose', dedupKey)) {
+          sendReminder('Jab It - Dose Reminder', 'Your dose is due today!', 'dose');
+        }
       } else if (diff < 0) {
-        sendReminder('Jab It - Dose Overdue', 'Your dose is ' + Math.abs(diff) + ' day(s) overdue.', 'dose');
+        const dedupKey = today + '|overdue|' + Math.abs(diff);
+        if (shouldSendReminder('dose', dedupKey)) {
+          sendReminder('Jab It - Dose Overdue', 'Your dose is ' + Math.abs(diff) + ' day(s) overdue.', 'dose');
+        }
       }
     }
 
@@ -462,7 +506,10 @@ const App = (() => {
         const scheduleMap = { daily: 1, every3: 3, weekly: 7 };
         const threshold = scheduleMap[settings.weighInSchedule] || 7;
         if (daysSince >= threshold) {
-          sendReminder('Jab It - Weigh-in Reminder', "It's been " + daysSince + ' days since your last weigh-in.', 'weighin');
+          const dedupKey = today + '|due|' + daysSince;
+          if (shouldSendReminder('weighin', dedupKey)) {
+            sendReminder('Jab It - Weigh-in Reminder', "It's been " + daysSince + ' days since your last weigh-in.', 'weighin');
+          }
         }
       }
     }
@@ -1941,6 +1988,8 @@ const App = (() => {
 
     applyTheme();
     updateWeightUnitLabels();
+    checkReminders();
+    scheduleReminderChecks();
     toast('Settings saved!', 'success');
   }
 
