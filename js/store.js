@@ -619,18 +619,225 @@ const Store = (() => {
 
   // Import data
   function importData(jsonStr) {
+    const result = { success: false, warnings: 0 };
+
+    function isPlainObject(value) {
+      return typeof value === 'object' && value !== null && !Array.isArray(value);
+    }
+
+    function toNumber(value) {
+      if (typeof value === 'number' && Number.isFinite(value)) return value;
+      if (typeof value === 'string' && value.trim() !== '') {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) return parsed;
+      }
+      return null;
+    }
+
+    function toDateString(value) {
+      if (typeof value !== 'string' && !(value instanceof Date)) return null;
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return null;
+      return d.toISOString().split('T')[0];
+    }
+
+    function toStringOrEmpty(value) {
+      if (value === undefined || value === null) return '';
+      return String(value);
+    }
+
+    function sanitizeWeights(weights) {
+      return weights.map(entry => {
+        if (!isPlainObject(entry)) {
+          result.warnings++;
+          return null;
+        }
+        const date = toDateString(entry.date);
+        const weight = toNumber(entry.weight);
+        if (!date || weight === null) {
+          result.warnings++;
+          return null;
+        }
+        return {
+          id: toStringOrEmpty(entry.id) || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          date,
+          weight,
+          note: toStringOrEmpty(entry.note),
+        };
+      }).filter(Boolean).sort((a, b) => new Date(a.date) - new Date(b.date));
+    }
+
+    function sanitizeJabs(jabs) {
+      return jabs.map(entry => {
+        if (!isPlainObject(entry)) {
+          result.warnings++;
+          return null;
+        }
+        const date = toDateString(entry.date);
+        const dose = toNumber(entry.dose);
+        if (!date || dose === null) {
+          result.warnings++;
+          return null;
+        }
+        const sideEffects = Array.isArray(entry.sideEffects)
+          ? entry.sideEffects.map(toStringOrEmpty).filter(Boolean)
+          : [];
+        return {
+          id: toStringOrEmpty(entry.id) || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          date,
+          time: toStringOrEmpty(entry.time),
+          medication: toStringOrEmpty(entry.medication),
+          dose,
+          doseUnit: toStringOrEmpty(entry.doseUnit || 'mg'),
+          site: toStringOrEmpty(entry.site),
+          sideEffects,
+          notes: toStringOrEmpty(entry.notes),
+        };
+      }).filter(Boolean).sort((a, b) => new Date(a.date) - new Date(b.date));
+    }
+
+    function sanitizeVictories(victories) {
+      return victories.map(entry => {
+        if (!isPlainObject(entry)) {
+          result.warnings++;
+          return null;
+        }
+        const date = toDateString(entry.date);
+        const text = toStringOrEmpty(entry.text).trim();
+        if (!date || !text) {
+          result.warnings++;
+          return null;
+        }
+        return {
+          id: toStringOrEmpty(entry.id) || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          date,
+          text,
+          category: toStringOrEmpty(entry.category),
+        };
+      }).filter(Boolean).sort((a, b) => new Date(a.date) - new Date(b.date));
+    }
+
+    function sanitizePhotos(photos) {
+      return photos.map(entry => {
+        if (!isPlainObject(entry)) {
+          result.warnings++;
+          return null;
+        }
+        const date = toDateString(entry.date);
+        const dataUrl = toStringOrEmpty(entry.dataUrl);
+        if (!date || !dataUrl) {
+          result.warnings++;
+          return null;
+        }
+        return {
+          id: toStringOrEmpty(entry.id) || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          date,
+          note: toStringOrEmpty(entry.note),
+          dataUrl,
+        };
+      }).filter(Boolean).sort((a, b) => new Date(a.date) - new Date(b.date));
+    }
+
     try {
       const data = JSON.parse(jsonStr);
-      if (data.profile) saveProfile(data.profile);
-      if (data.weights) saveWeights(data.weights);
-      if (data.jabs) saveJabs(data.jabs);
-      if (data.goals) saveGoals(data.goals);
-      if (data.settings) saveSettings(data.settings);
-      if (data.victories) saveVictories(data.victories);
-      if (data.photos) savePhotos(data.photos);
-      return true;
+
+      if (!isPlainObject(data)) return result;
+
+      // Objects
+      if (data.profile === undefined) {
+        saveProfile({ ...defaults.profile });
+      } else if (!isPlainObject(data.profile)) {
+        result.warnings++;
+      } else {
+        const mergedProfile = {
+          ...defaults.profile,
+          ...data.profile,
+        };
+        const startDate = toDateString(mergedProfile.startDate);
+        const age = toNumber(mergedProfile.age);
+        const height = toNumber(mergedProfile.height);
+        const startWeight = toNumber(mergedProfile.startWeight);
+
+        mergedProfile.name = toStringOrEmpty(mergedProfile.name);
+        mergedProfile.age = age === null ? '' : age;
+        mergedProfile.height = height === null ? '' : height;
+        mergedProfile.heightUnit = toStringOrEmpty(mergedProfile.heightUnit || defaults.profile.heightUnit);
+        mergedProfile.startWeight = startWeight === null ? '' : startWeight;
+        mergedProfile.startDate = startDate || defaults.profile.startDate;
+        mergedProfile.medication = toStringOrEmpty(mergedProfile.medication || defaults.profile.medication);
+
+        saveProfile(mergedProfile);
+      }
+
+      if (data.goals === undefined) {
+        saveGoals({ ...defaults.goals });
+      } else if (!isPlainObject(data.goals)) {
+        result.warnings++;
+      } else {
+        const mergedGoals = {
+          ...defaults.goals,
+          ...data.goals,
+        };
+        const targetWeight = toNumber(mergedGoals.targetWeight);
+        const weeklyTarget = toNumber(mergedGoals.weeklyTarget);
+        const targetDate = toDateString(mergedGoals.targetDate);
+
+        mergedGoals.targetWeight = targetWeight === null ? '' : targetWeight;
+        mergedGoals.weeklyTarget = weeklyTarget === null ? defaults.goals.weeklyTarget : weeklyTarget;
+        mergedGoals.targetDate = targetDate || '';
+
+        saveGoals(mergedGoals);
+      }
+
+      if (data.settings === undefined) {
+        saveSettings({ ...defaults.settings });
+      } else if (!isPlainObject(data.settings)) {
+        result.warnings++;
+      } else {
+        const mergedSettings = {
+          ...defaults.settings,
+          ...data.settings,
+        };
+        saveSettings(mergedSettings);
+      }
+
+      // Arrays
+      if (data.weights === undefined) {
+        saveWeights([]);
+      } else if (!Array.isArray(data.weights)) {
+        result.warnings++;
+      } else {
+        saveWeights(sanitizeWeights(data.weights));
+      }
+
+      if (data.jabs === undefined) {
+        saveJabs([]);
+      } else if (!Array.isArray(data.jabs)) {
+        result.warnings++;
+      } else {
+        saveJabs(sanitizeJabs(data.jabs));
+      }
+
+      if (data.victories === undefined) {
+        saveVictories([]);
+      } else if (!Array.isArray(data.victories)) {
+        result.warnings++;
+      } else {
+        saveVictories(sanitizeVictories(data.victories));
+      }
+
+      if (data.photos === undefined) {
+        savePhotos([]);
+      } else if (!Array.isArray(data.photos)) {
+        result.warnings++;
+      } else {
+        savePhotos(sanitizePhotos(data.photos));
+      }
+
+      result.success = true;
+      return result;
     } catch {
-      return false;
+      return result;
     }
   }
 
@@ -647,11 +854,12 @@ const Store = (() => {
 
   // Import from backup link
   function importFromBackupLink(encoded) {
+    const failure = { success: false, warnings: 0 };
     try {
       const json = decodeURIComponent(escape(atob(encoded)));
       return importData(json);
     } catch {
-      return false;
+      return failure;
     }
   }
 
