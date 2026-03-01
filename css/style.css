@@ -2407,6 +2407,18 @@ textarea:focus-visible {
   margin-bottom: 12px;
 }
 
+/* --- Account settings --- */
+.account-email-display {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text);
+  word-break: break-all;
+}
+
+#auth-magic-link-sent h3 {
+  color: var(--success);
+}
+
 /* Reduce motion for users who prefer it */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

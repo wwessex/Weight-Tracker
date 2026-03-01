@@ -56,6 +56,7 @@
   <link rel="stylesheet" href="css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
   <!-- Structured Data (JSON-LD) -->
   <script type="application/ld+json">
@@ -186,6 +187,33 @@
       <div class="tour-actions">
         <button class="btn btn-ghost btn-sm" id="tour-skip">Skip Tour</button>
         <button class="btn btn-primary btn-sm" id="tour-next">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auth Modal -->
+  <div id="auth-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Sign In">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Sign In</h3>
+        <button class="btn-close" id="auth-modal-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="form-help">Sign in with your email to back up your data to the cloud. No password needed &mdash; we'll send you a magic link.</p>
+        <form id="auth-form">
+          <div class="form-group">
+            <label for="auth-email">Email address</label>
+            <input type="email" id="auth-email" placeholder="you@example.com" required autocomplete="email">
+          </div>
+          <button type="submit" class="btn btn-primary btn-block" id="btn-send-magic-link">Send Magic Link</button>
+        </form>
+        <div id="auth-magic-link-sent" style="display:none;">
+          <div style="text-align:center;padding:20px 0;">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" aria-hidden="true"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
+            <h3 style="margin-top:12px;color:var(--success);">Check your email!</h3>
+            <p class="form-help">We sent a login link to <strong id="auth-sent-email"></strong>. Click the link to sign in.</p>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -718,6 +746,31 @@
         </div>
       </div>
 
+      <!-- Account Section -->
+      <div class="settings-section" id="settings-account">
+        <h3 class="settings-section-title">Account</h3>
+        <div class="settings-card">
+          <div id="account-signed-out">
+            <p class="form-help">Sign in to sync your data across devices and keep a cloud backup.</p>
+            <button class="btn btn-primary btn-block" id="btn-open-auth" type="button">Sign In / Create Account</button>
+          </div>
+          <div id="account-signed-in" style="display:none;">
+            <div class="form-group">
+              <label>Signed in as</label>
+              <p id="account-email" class="account-email-display"></p>
+            </div>
+            <div class="form-group">
+              <label>Last synced</label>
+              <p id="account-last-sync" class="form-help">Never</p>
+            </div>
+            <div class="data-buttons">
+              <button class="btn btn-outline btn-block" id="btn-sync-now" type="button">Sync Now</button>
+              <button class="btn btn-ghost btn-block" id="btn-sign-out" type="button">Sign Out</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Data Section -->
       <div class="settings-section">
         <h3 class="settings-section-title">Data</h3>
@@ -1236,7 +1289,10 @@
     <div class="toast-container" id="toast-container" aria-live="polite"></div>
   </div>
 
+  <script src="js/config.js"></script>
   <script src="js/store.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/sync.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
