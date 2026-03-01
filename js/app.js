@@ -1,9 +1,11 @@
 // Jab It: Weight Loss Tracker - Main Application Controller
 const App = (() => {
   let weightSummaryChart, weightFullChart, doseChart, doseRingChart;
+  let measurementChart, moodTrendChart, fastingRingChart;
   let currentProgressRange = 'all';
   let currentDoseRange = 'all';
   let countdownInterval = null;
+  let fastingTimerInterval = null;
   let remindersInterval = null;
   let reminderSyncCapabilities = null;
   let isUiBound = false;
@@ -53,6 +55,7 @@ const App = (() => {
     initSummaryPage();
     initDosesPage();
     initProgressPage();
+    initJournalPage();
     initSettingsPage();
     initModals();
 
@@ -91,6 +94,7 @@ const App = (() => {
     refreshSummary();
     refreshDoses();
     refreshProgress();
+    refreshJournal();
     refreshSettings();
   }
 
@@ -237,9 +241,16 @@ const App = (() => {
 
     window.location.hash = page;
 
+    // Clear fasting timer when leaving journal page
+    if (page !== 'journal' && fastingTimerInterval) {
+      clearInterval(fastingTimerInterval);
+      fastingTimerInterval = null;
+    }
+
     if (page === 'summary') refreshSummary();
     if (page === 'doses') refreshDoses();
     if (page === 'progress') refreshProgress();
+    if (page === 'journal') refreshJournal();
     if (page === 'settings') refreshSettings();
   }
 
@@ -1699,6 +1710,41 @@ const App = (() => {
       });
     });
 
+    // Measurement button
+    document.getElementById('btn-add-measurement').addEventListener('click', () => openMeasurementModal());
+
+    // Measurement modal
+    const measurementModal = document.getElementById('measurement-modal');
+    const measurementForm = document.getElementById('measurement-form');
+    document.getElementById('measurement-modal-close').addEventListener('click', () => closeModal(measurementModal));
+    document.getElementById('measurement-form-cancel').addEventListener('click', () => closeModal(measurementModal));
+    measurementModal.addEventListener('click', (e) => { if (e.target === measurementModal) closeModal(measurementModal); });
+    measurementForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = document.getElementById('measurement-edit-id').value;
+      const entry = {
+        date: document.getElementById('measurement-date').value,
+        waist: document.getElementById('measurement-waist').value || null,
+        hips: document.getElementById('measurement-hips').value || null,
+        chest: document.getElementById('measurement-chest').value || null,
+        neck: document.getElementById('measurement-neck').value || null,
+        armLeft: document.getElementById('measurement-arm-left').value || null,
+        armRight: document.getElementById('measurement-arm-right').value || null,
+        thighLeft: document.getElementById('measurement-thigh-left').value || null,
+        thighRight: document.getElementById('measurement-thigh-right').value || null,
+        note: document.getElementById('measurement-note').value,
+      };
+      if (id) {
+        Store.updateMeasurement(id, entry);
+        toast('Measurement updated', 'success');
+      } else {
+        Store.addMeasurement(entry);
+        toast('Measurement logged!', 'success');
+      }
+      closeModal(measurementModal);
+      refreshProgress();
+    });
+
     // Photo & NSV buttons
     document.getElementById('btn-add-photo').addEventListener('click', () => {
       document.getElementById('photo-date').value = formatLocalDate(new Date());
@@ -1836,6 +1882,9 @@ const App = (() => {
 
     // Weight entries list
     renderWeightEntries(filtered);
+
+    // Body measurements
+    renderMeasurements();
 
     // Photos
     await renderPhotoGallery();
@@ -2334,6 +2383,9 @@ const App = (() => {
 
     document.getElementById('btn-save-settings').addEventListener('click', () => saveAllSettings());
 
+    // Doctor visit report
+    document.getElementById('btn-doctor-report').addEventListener('click', generateDoctorReport);
+
     // Live theme preview in settings
     document.getElementById('set-theme').addEventListener('change', (e) => {
       const settings = Store.getSettings();
@@ -2558,6 +2610,725 @@ const App = (() => {
     refreshReminderCapabilityStatus();
   }
 
+  // ===== BODY MEASUREMENTS =====
+  function openMeasurementModal(id) {
+    const modal = document.getElementById('measurement-modal');
+    if (id) {
+      const measurements = Store.getMeasurements();
+      const m = measurements.find(x => x.id === id);
+      if (!m) return;
+      document.getElementById('measurement-edit-id').value = id;
+      document.getElementById('measurement-modal-title').textContent = 'Edit Measurements';
+      document.getElementById('measurement-date').value = m.date;
+      document.getElementById('measurement-waist').value = m.waist || '';
+      document.getElementById('measurement-hips').value = m.hips || '';
+      document.getElementById('measurement-chest').value = m.chest || '';
+      document.getElementById('measurement-neck').value = m.neck || '';
+      document.getElementById('measurement-arm-left').value = m.armLeft || '';
+      document.getElementById('measurement-arm-right').value = m.armRight || '';
+      document.getElementById('measurement-thigh-left').value = m.thighLeft || '';
+      document.getElementById('measurement-thigh-right').value = m.thighRight || '';
+      document.getElementById('measurement-note').value = m.note || '';
+    } else {
+      document.getElementById('measurement-edit-id').value = '';
+      document.getElementById('measurement-modal-title').textContent = 'Log Measurements';
+      document.getElementById('measurement-date').value = formatLocalDate(new Date());
+      document.getElementById('measurement-waist').value = '';
+      document.getElementById('measurement-hips').value = '';
+      document.getElementById('measurement-chest').value = '';
+      document.getElementById('measurement-neck').value = '';
+      document.getElementById('measurement-arm-left').value = '';
+      document.getElementById('measurement-arm-right').value = '';
+      document.getElementById('measurement-thigh-left').value = '';
+      document.getElementById('measurement-thigh-right').value = '';
+      document.getElementById('measurement-note').value = '';
+    }
+    openModal(modal);
+  }
+
+  function renderMeasurements() {
+    const measurements = Store.getMeasurements();
+    const list = document.getElementById('measurement-list');
+    const empty = document.getElementById('measurement-empty');
+    const chartContainer = document.getElementById('measurement-chart-container');
+    const statsEl = document.getElementById('measurement-stats');
+
+    if (measurements.length === 0) {
+      list.innerHTML = '';
+      empty.style.display = '';
+      chartContainer.style.display = 'none';
+      statsEl.style.display = 'none';
+      return;
+    }
+
+    empty.style.display = 'none';
+
+    // Measurement stats
+    const mStats = Store.getMeasurementStats();
+    if (mStats) {
+      statsEl.style.display = '';
+      const fields = [
+        { key: 'waist', label: 'Waist' },
+        { key: 'hips', label: 'Hips' },
+        { key: 'chest', label: 'Chest' },
+      ];
+      statsEl.innerHTML = '<div class="measurement-stats-grid">' + fields.map(f => {
+        const latest = mStats.latest[f.key];
+        const change = mStats.changes[f.key];
+        if (!latest) return '';
+        const changeStr = change ? (change > 0 ? '+' : '') + change + ' cm' : '';
+        const cls = change ? (change < 0 ? 'loss' : change > 0 ? 'gain' : '') : '';
+        return '<div class="measurement-stat-item"><span class="measurement-stat-label">' + f.label + '</span><span class="measurement-stat-value">' + latest + ' cm</span>' + (changeStr ? '<span class="measurement-stat-change ' + cls + '">' + changeStr + '</span>' : '') + '</div>';
+      }).filter(Boolean).join('') + '</div>';
+    } else {
+      statsEl.style.display = 'none';
+    }
+
+    // Chart
+    if (measurements.length >= 2) {
+      chartContainer.style.display = '';
+      renderMeasurementChart(measurements);
+    } else {
+      chartContainer.style.display = 'none';
+    }
+
+    // List
+    const sorted = [...measurements].reverse();
+    list.innerHTML = sorted.map(m => {
+      const parts = [];
+      if (m.waist) parts.push('W:' + m.waist);
+      if (m.hips) parts.push('H:' + m.hips);
+      if (m.chest) parts.push('C:' + m.chest);
+      return '<div class="measurement-item"><div class="measurement-item-info"><div class="measurement-item-date">' + formatDateShort(m.date) + '</div><div class="measurement-item-values">' + parts.join(' | ') + ' cm</div></div><div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm" onclick="App.editMeasurement(\'' + m.id + '\')" aria-label="Edit measurement">Edit</button><button class="btn btn-ghost btn-sm" onclick="App.removeMeasurement(\'' + m.id + '\')" aria-label="Delete measurement">Del</button></div></div>';
+    }).join('');
+    staggerListItems('#measurement-list .measurement-item');
+  }
+
+  function renderMeasurementChart(measurements) {
+    const colors = getChartColors();
+    measurementChart = destroyChart(measurementChart);
+    const ctx = document.getElementById('chart-measurements').getContext('2d');
+
+    const labels = measurements.map(m => m.date);
+    const datasets = [];
+    const colorMap = { waist: '#8b5cf6', hips: '#ec4899', chest: '#f59e0b' };
+    const fields = [
+      { key: 'waist', label: 'Waist' },
+      { key: 'hips', label: 'Hips' },
+      { key: 'chest', label: 'Chest' },
+    ];
+
+    fields.forEach(f => {
+      const data = measurements.map(m => m[f.key] ? parseFloat(m[f.key]) : null);
+      if (data.some(d => d !== null)) {
+        datasets.push({
+          label: f.label,
+          data,
+          borderColor: colorMap[f.key],
+          borderWidth: 2,
+          tension: 0.4,
+          pointRadius: 3,
+          pointBackgroundColor: colorMap[f.key],
+          fill: false,
+          spanGaps: true,
+        });
+      }
+    });
+
+    if (datasets.length === 0) return;
+
+    measurementChart = new Chart(ctx, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 800, easing: 'easeOutQuart' },
+        plugins: {
+          legend: { display: true, labels: { color: colors.textMuted, font: { size: 10 } } },
+          tooltip: {
+            backgroundColor: 'rgba(15,23,42,0.9)',
+            titleColor: '#f1f5f9',
+            bodyColor: '#e2e8f0',
+            cornerRadius: 10,
+            padding: 12,
+            callbacks: { label: (c) => c.dataset.label + ': ' + c.parsed.y + ' cm' },
+          },
+        },
+        scales: {
+          x: { type: 'time', time: { tooltipFormat: 'dd MMM yyyy' }, grid: { display: false }, ticks: { color: colors.textMuted, font: { size: 10 }, maxTicksLimit: 6 } },
+          y: { grid: { color: colors.grid }, ticks: { color: colors.textMuted, font: { size: 10 } } },
+        },
+      },
+    });
+  }
+
+  function removeMeasurement(id) {
+    if (!confirm('Delete this measurement?')) return;
+    Store.deleteMeasurement(id);
+    toast('Measurement deleted');
+    refreshProgress();
+  }
+
+  // ===== JOURNAL PAGE =====
+  function initJournalPage() {
+    // Journal modal
+    const journalModal = document.getElementById('journal-modal');
+    const journalForm = document.getElementById('journal-form');
+    document.getElementById('btn-add-journal').addEventListener('click', () => openJournalModal());
+    document.getElementById('journal-modal-close').addEventListener('click', () => closeModal(journalModal));
+    document.getElementById('journal-form-cancel').addEventListener('click', () => closeModal(journalModal));
+    journalModal.addEventListener('click', (e) => { if (e.target === journalModal) closeModal(journalModal); });
+
+    // Mood picker buttons
+    document.querySelectorAll('#mood-picker .mood-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#mood-picker .mood-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('journal-mood').value = btn.dataset.value;
+      });
+    });
+    document.querySelectorAll('#energy-picker .mood-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#energy-picker .mood-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('journal-energy').value = btn.dataset.value;
+      });
+    });
+
+    journalForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = document.getElementById('journal-edit-id').value;
+      const entry = {
+        date: document.getElementById('journal-date').value,
+        mood: document.getElementById('journal-mood').value ? parseInt(document.getElementById('journal-mood').value) : null,
+        energy: document.getElementById('journal-energy').value ? parseInt(document.getElementById('journal-energy').value) : null,
+        text: document.getElementById('journal-text').value,
+      };
+      if (id) {
+        Store.updateJournalEntry(id, entry);
+        toast('Journal entry updated', 'success');
+      } else {
+        Store.addJournalEntry(entry);
+        toast('Journal entry saved!', 'success');
+      }
+      closeModal(journalModal);
+      refreshJournal();
+    });
+
+    // Exercise modal
+    const exerciseModal = document.getElementById('exercise-modal');
+    const exerciseForm = document.getElementById('exercise-form');
+    document.getElementById('btn-add-exercise').addEventListener('click', () => openExerciseModal());
+    document.getElementById('exercise-modal-close').addEventListener('click', () => closeModal(exerciseModal));
+    document.getElementById('exercise-form-cancel').addEventListener('click', () => closeModal(exerciseModal));
+    exerciseModal.addEventListener('click', (e) => { if (e.target === exerciseModal) closeModal(exerciseModal); });
+
+    exerciseForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = document.getElementById('exercise-edit-id').value;
+      const entry = {
+        date: document.getElementById('exercise-date').value,
+        type: document.getElementById('exercise-type').value,
+        duration: document.getElementById('exercise-duration').value,
+        intensity: document.getElementById('exercise-intensity').value,
+        calories: document.getElementById('exercise-calories').value || null,
+        note: document.getElementById('exercise-note').value,
+      };
+      if (id) {
+        Store.updateExercise(id, entry);
+        toast('Exercise updated', 'success');
+      } else {
+        Store.addExercise(entry);
+        toast('Exercise logged!', 'success');
+      }
+      closeModal(exerciseModal);
+      refreshJournal();
+    });
+
+    // Fasting timer
+    document.querySelectorAll('#fasting-protocols .protocol-chip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#fasting-protocols .protocol-chip').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+
+    document.getElementById('btn-start-fast').addEventListener('click', startFast);
+    document.getElementById('btn-end-fast').addEventListener('click', endFast);
+    document.getElementById('btn-cancel-fast').addEventListener('click', cancelFast);
+  }
+
+  function openJournalModal(id) {
+    const modal = document.getElementById('journal-modal');
+    if (id) {
+      const journal = Store.getJournal();
+      const j = journal.find(x => x.id === id);
+      if (!j) return;
+      document.getElementById('journal-edit-id').value = id;
+      document.getElementById('journal-modal-title').textContent = 'Edit Journal Entry';
+      document.getElementById('journal-date').value = j.date;
+      document.getElementById('journal-mood').value = j.mood || '';
+      document.getElementById('journal-energy').value = j.energy || '';
+      document.getElementById('journal-text').value = j.text || '';
+      // Set mood buttons
+      document.querySelectorAll('#mood-picker .mood-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.value === String(j.mood));
+      });
+      document.querySelectorAll('#energy-picker .mood-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.value === String(j.energy));
+      });
+    } else {
+      document.getElementById('journal-edit-id').value = '';
+      document.getElementById('journal-modal-title').textContent = 'Journal Entry';
+      document.getElementById('journal-date').value = formatLocalDate(new Date());
+      document.getElementById('journal-mood').value = '';
+      document.getElementById('journal-energy').value = '';
+      document.getElementById('journal-text').value = '';
+      document.querySelectorAll('#mood-picker .mood-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('#energy-picker .mood-btn').forEach(b => b.classList.remove('active'));
+    }
+    openModal(modal);
+  }
+
+  function openExerciseModal(id) {
+    const modal = document.getElementById('exercise-modal');
+    if (id) {
+      const exercises = Store.getExercises();
+      const ex = exercises.find(x => x.id === id);
+      if (!ex) return;
+      document.getElementById('exercise-edit-id').value = id;
+      document.getElementById('exercise-modal-title').textContent = 'Edit Exercise';
+      document.getElementById('exercise-date').value = ex.date;
+      document.getElementById('exercise-type').value = ex.type || 'walking';
+      document.getElementById('exercise-duration').value = ex.duration || '';
+      document.getElementById('exercise-intensity').value = ex.intensity || 'moderate';
+      document.getElementById('exercise-calories').value = ex.calories || '';
+      document.getElementById('exercise-note').value = ex.note || '';
+    } else {
+      document.getElementById('exercise-edit-id').value = '';
+      document.getElementById('exercise-modal-title').textContent = 'Log Exercise';
+      document.getElementById('exercise-date').value = formatLocalDate(new Date());
+      document.getElementById('exercise-type').value = 'walking';
+      document.getElementById('exercise-duration').value = '';
+      document.getElementById('exercise-intensity').value = 'moderate';
+      document.getElementById('exercise-calories').value = '';
+      document.getElementById('exercise-note').value = '';
+    }
+    openModal(modal);
+  }
+
+  function refreshJournal() {
+    refreshFastingTimer();
+    refreshFastingHistory();
+    refreshJournalList();
+    refreshMoodTrend();
+    refreshExerciseList();
+  }
+
+  // --- Journal entries ---
+  function refreshJournalList() {
+    const journal = Store.getJournal();
+    const list = document.getElementById('journal-list');
+    const empty = document.getElementById('journal-empty');
+
+    if (journal.length === 0) {
+      list.innerHTML = '';
+      empty.style.display = '';
+      return;
+    }
+    empty.style.display = 'none';
+
+    const moodLabels = { 1: 'Awful', 2: 'Bad', 3: 'Okay', 4: 'Good', 5: 'Great' };
+    const energyLabels = { 1: 'Very Low', 2: 'Low', 3: 'Normal', 4: 'High', 5: 'Very High' };
+    const sorted = [...journal].reverse();
+    list.innerHTML = sorted.map(j => {
+      const moodText = j.mood ? moodLabels[j.mood] || j.mood : '';
+      const energyText = j.energy ? energyLabels[j.energy] || j.energy : '';
+      const tags = [moodText ? 'Mood: ' + moodText : '', energyText ? 'Energy: ' + energyText : ''].filter(Boolean).join(' | ');
+      return '<div class="journal-item"><div class="journal-item-info"><div class="journal-item-date">' + formatDateShort(j.date) + '</div>' + (tags ? '<div class="journal-item-tags">' + tags + '</div>' : '') + (j.text ? '<div class="journal-item-text">' + j.text + '</div>' : '') + '</div><div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm" onclick="App.editJournalEntry(\'' + j.id + '\')" aria-label="Edit journal">Edit</button><button class="btn btn-ghost btn-sm" onclick="App.removeJournalEntry(\'' + j.id + '\')" aria-label="Delete journal">Del</button></div></div>';
+    }).join('');
+    staggerListItems('#journal-list .journal-item');
+  }
+
+  function refreshMoodTrend() {
+    const trend = Store.getMoodTrend(30);
+    const card = document.getElementById('mood-trend-card');
+    if (trend.length < 2) {
+      card.style.display = 'none';
+      return;
+    }
+    card.style.display = '';
+    const colors = getChartColors();
+    moodTrendChart = destroyChart(moodTrendChart);
+    const ctx = document.getElementById('chart-mood-trend').getContext('2d');
+
+    const datasets = [];
+    const moodData = trend.map(t => t.mood);
+    const energyData = trend.map(t => t.energy);
+
+    if (moodData.some(d => d !== null)) {
+      datasets.push({
+        label: 'Mood',
+        data: moodData,
+        borderColor: '#8b5cf6',
+        borderWidth: 2,
+        tension: 0.4,
+        pointRadius: 3,
+        pointBackgroundColor: '#8b5cf6',
+        fill: false,
+        spanGaps: true,
+      });
+    }
+    if (energyData.some(d => d !== null)) {
+      datasets.push({
+        label: 'Energy',
+        data: energyData,
+        borderColor: '#f59e0b',
+        borderWidth: 2,
+        tension: 0.4,
+        pointRadius: 3,
+        pointBackgroundColor: '#f59e0b',
+        fill: false,
+        spanGaps: true,
+      });
+    }
+
+    if (datasets.length === 0) { card.style.display = 'none'; return; }
+
+    moodTrendChart = new Chart(ctx, {
+      type: 'line',
+      data: { labels: trend.map(t => t.date), datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 600 },
+        plugins: {
+          legend: { display: true, labels: { color: colors.textMuted, font: { size: 10 } } },
+          tooltip: { backgroundColor: 'rgba(15,23,42,0.9)', titleColor: '#f1f5f9', bodyColor: '#e2e8f0', cornerRadius: 10, padding: 10 },
+        },
+        scales: {
+          x: { type: 'time', time: { tooltipFormat: 'dd MMM yyyy' }, grid: { display: false }, ticks: { color: colors.textMuted, font: { size: 10 }, maxTicksLimit: 6 } },
+          y: { min: 0.5, max: 5.5, grid: { color: colors.grid }, ticks: { color: colors.textMuted, stepSize: 1, callback: v => ({ 1: 'Awful', 2: 'Bad', 3: 'Okay', 4: 'Good', 5: 'Great' }[v] || '') } },
+        },
+      },
+    });
+  }
+
+  function removeJournalEntry(id) {
+    if (!confirm('Delete this journal entry?')) return;
+    Store.deleteJournalEntry(id);
+    toast('Entry deleted');
+    refreshJournal();
+  }
+
+  // --- Exercise ---
+  function refreshExerciseList() {
+    const exercises = Store.getExercises();
+    const list = document.getElementById('exercise-list');
+    const empty = document.getElementById('exercise-empty');
+    const statsRow = document.getElementById('exercise-stats-row');
+
+    if (exercises.length === 0) {
+      list.innerHTML = '';
+      empty.style.display = '';
+      statsRow.style.display = 'none';
+      return;
+    }
+    empty.style.display = 'none';
+
+    // Stats
+    const stats = Store.getExerciseStats(30);
+    if (stats.sessions > 0) {
+      statsRow.style.display = '';
+      document.getElementById('ex-sessions').textContent = stats.sessions;
+      document.getElementById('ex-minutes').textContent = stats.totalMinutes;
+      document.getElementById('ex-weekly').textContent = stats.weeklyAvg;
+    } else {
+      statsRow.style.display = 'none';
+    }
+
+    const typeIcons = { walking: '🚶', running: '🏃', swimming: '🏊', cycling: '🚴', strength: '💪', yoga: '🧘', stretching: '🤸', other: '⚡' };
+    const sorted = [...exercises].reverse();
+    list.innerHTML = sorted.map(ex => {
+      const icon = typeIcons[ex.type] || '⚡';
+      const typeName = ex.type ? ex.type.charAt(0).toUpperCase() + ex.type.slice(1) : 'Exercise';
+      return '<div class="exercise-item"><div class="exercise-item-icon">' + icon + '</div><div class="exercise-item-info"><div class="exercise-item-title">' + typeName + '</div><div class="exercise-item-sub">' + formatDateShort(ex.date) + ' | ' + (ex.duration || 0) + ' min | ' + (ex.intensity || 'moderate') + (ex.calories ? ' | ' + ex.calories + ' cal' : '') + '</div></div><div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm" onclick="App.editExercise(\'' + ex.id + '\')" aria-label="Edit exercise">Edit</button><button class="btn btn-ghost btn-sm" onclick="App.removeExercise(\'' + ex.id + '\')" aria-label="Delete exercise">Del</button></div></div>';
+    }).join('');
+    staggerListItems('#exercise-list .exercise-item');
+  }
+
+  function removeExercise(id) {
+    if (!confirm('Delete this exercise?')) return;
+    Store.deleteExercise(id);
+    toast('Exercise deleted');
+    refreshJournal();
+  }
+
+  // --- Fasting Timer ---
+  function startFast() {
+    const activeChip = document.querySelector('#fasting-protocols .protocol-chip.active');
+    const protocol = activeChip ? activeChip.dataset.protocol : '16:8';
+    const targetHours = activeChip ? parseInt(activeChip.dataset.hours) : 16;
+
+    Store.setActiveFast({
+      startTime: new Date().toISOString(),
+      targetHours,
+      protocol,
+    });
+    toast('Fast started!', 'success');
+    refreshFastingTimer();
+  }
+
+  function endFast() {
+    const active = Store.getActiveFast();
+    if (!active) return;
+
+    const duration = (new Date() - new Date(active.startTime)) / (1000 * 60 * 60);
+    const completed = duration >= active.targetHours;
+
+    Store.addFast({
+      startTime: active.startTime,
+      endTime: new Date().toISOString(),
+      targetHours: active.targetHours,
+      protocol: active.protocol,
+      completed,
+      note: '',
+    });
+    Store.clearActiveFast();
+    toast(completed ? 'Fast completed! Well done!' : 'Fast ended.', completed ? 'success' : '');
+    refreshFastingTimer();
+    refreshFastingHistory();
+  }
+
+  function cancelFast() {
+    if (!confirm('Cancel this fast?')) return;
+    Store.clearActiveFast();
+    toast('Fast cancelled');
+    refreshFastingTimer();
+  }
+
+  function refreshFastingTimer() {
+    const active = Store.getActiveFast();
+    const startBtn = document.getElementById('btn-start-fast');
+    const endBtn = document.getElementById('btn-end-fast');
+    const cancelBtn = document.getElementById('btn-cancel-fast');
+    const timerValue = document.getElementById('fasting-timer-value');
+    const timerSub = document.getElementById('fasting-timer-sub');
+
+    if (fastingTimerInterval) {
+      clearInterval(fastingTimerInterval);
+      fastingTimerInterval = null;
+    }
+
+    if (!active) {
+      startBtn.style.display = '';
+      endBtn.style.display = 'none';
+      cancelBtn.style.display = 'none';
+      timerValue.textContent = '00:00:00';
+      timerSub.textContent = 'ready';
+      renderFastingRing(0);
+      return;
+    }
+
+    startBtn.style.display = 'none';
+    endBtn.style.display = '';
+    cancelBtn.style.display = '';
+
+    function updateTimer() {
+      const elapsed = (new Date() - new Date(active.startTime)) / 1000;
+      const hours = Math.floor(elapsed / 3600);
+      const mins = Math.floor((elapsed % 3600) / 60);
+      const secs = Math.floor(elapsed % 60);
+      timerValue.textContent = String(hours).padStart(2, '0') + ':' + String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+
+      const targetSecs = active.targetHours * 3600;
+      const remaining = targetSecs - elapsed;
+      if (remaining > 0) {
+        const rh = Math.floor(remaining / 3600);
+        const rm = Math.floor((remaining % 3600) / 60);
+        timerSub.textContent = rh + 'h ' + rm + 'm remaining';
+      } else {
+        timerSub.textContent = 'Goal reached!';
+      }
+
+      const progress = Math.min(1, elapsed / targetSecs);
+      renderFastingRing(progress);
+    }
+    updateTimer();
+    fastingTimerInterval = setInterval(updateTimer, 1000);
+  }
+
+  function renderFastingRing(progress) {
+    const colors = getChartColors();
+    fastingRingChart = destroyChart(fastingRingChart);
+    const ctx = document.getElementById('chart-fasting-ring').getContext('2d');
+
+    fastingRingChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        datasets: [{
+          data: [progress * 100, (1 - progress) * 100],
+          backgroundColor: [progress >= 1 ? '#10b981' : '#8b5cf6', colors.grid],
+          borderWidth: 0,
+          cutout: '78%',
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        rotation: -90,
+        circumference: 360,
+        animation: { duration: 300 },
+      },
+    });
+  }
+
+  function refreshFastingHistory() {
+    const fasts = Store.getFasts();
+    const stats = Store.getFastingStats();
+    const statsRow = document.getElementById('fasting-stats-row');
+    const header = document.getElementById('fasting-history-header');
+    const list = document.getElementById('fasting-list');
+
+    if (fasts.length === 0) {
+      statsRow.style.display = 'none';
+      header.style.display = 'none';
+      list.innerHTML = '';
+      return;
+    }
+
+    // Stats
+    statsRow.style.display = '';
+    document.getElementById('fast-total').textContent = stats.totalFasts;
+    document.getElementById('fast-avg').textContent = stats.avgDuration + 'h';
+    document.getElementById('fast-longest').textContent = stats.longestFast + 'h';
+    document.getElementById('fast-rate').textContent = stats.completionRate + '%';
+
+    // History list
+    header.style.display = '';
+    document.getElementById('fast-count').textContent = fasts.length;
+    const sorted = [...fasts].reverse().slice(0, 20);
+    list.innerHTML = sorted.map(f => {
+      const duration = f.startTime && f.endTime ? Math.round((new Date(f.endTime) - new Date(f.startTime)) / (1000 * 60 * 60) * 10) / 10 : 0;
+      const dateStr = f.startTime ? formatDateShort(f.startTime.split('T')[0]) : '--';
+      const status = f.completed ? '<span style="color:var(--success)">Completed</span>' : '<span style="color:var(--text-muted)">Ended early</span>';
+      return '<div class="fasting-item"><div class="fasting-item-info"><div class="fasting-item-date">' + dateStr + ' | ' + f.protocol + '</div><div class="fasting-item-detail">' + duration + 'h / ' + f.targetHours + 'h target | ' + status + '</div></div><button class="btn btn-ghost btn-sm" onclick="App.removeFast(\'' + f.id + '\')" aria-label="Delete fast">Del</button></div>';
+    }).join('');
+  }
+
+  function removeFast(id) {
+    if (!confirm('Delete this fast?')) return;
+    Store.deleteFast(id);
+    toast('Fast deleted');
+    refreshFastingHistory();
+  }
+
+  // ===== DOCTOR VISIT REPORT =====
+  function generateDoctorReport() {
+    const report = Store.generateDoctorReport();
+    const unit = report.weightSummary.unit;
+
+    const medLabels = { semaglutide: 'Semaglutide (Ozempic/Wegovy)', tirzepatide: 'Tirzepatide (Mounjaro/Zepbound)', liraglutide: 'Liraglutide (Saxenda)', other: 'Other', none: 'None' };
+    const medName = medLabels[report.patient.medication] || report.patient.medication || 'Not specified';
+
+    let html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Doctor Visit Report - ' + report.reportDate + '</title>';
+    html += '<style>body{font-family:Inter,Arial,sans-serif;max-width:800px;margin:0 auto;padding:20px;color:#1e293b;font-size:14px}';
+    html += 'h1{font-size:22px;border-bottom:2px solid #6366f1;padding-bottom:8px;margin-bottom:4px}';
+    html += 'h2{font-size:16px;color:#6366f1;margin-top:24px;margin-bottom:8px;border-bottom:1px solid #e2e8f0;padding-bottom:4px}';
+    html += '.report-meta{color:#64748b;font-size:12px;margin-bottom:16px}';
+    html += '.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:12px 0}';
+    html += '.stat-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center}';
+    html += '.stat-value{font-size:24px;font-weight:700;color:#0f172a}.stat-label{font-size:11px;color:#64748b;margin-top:2px}';
+    html += 'table{width:100%;border-collapse:collapse;margin:8px 0;font-size:13px}th,td{padding:6px 10px;border:1px solid #e2e8f0;text-align:left}th{background:#f1f5f9;font-weight:600}';
+    html += '.footer{margin-top:32px;text-align:center;color:#94a3b8;font-size:11px;border-top:1px solid #e2e8f0;padding-top:12px}';
+    html += '@media print{body{margin:0;padding:10px}}</style></head><body>';
+
+    html += '<h1>Weight Loss Progress Report</h1>';
+    html += '<p class="report-meta">Generated: ' + report.reportDate + ' | Days on plan: ' + report.daysOnPlan + '</p>';
+
+    // Patient info
+    html += '<h2>Patient Information</h2>';
+    html += '<table><tr><th>Name</th><td>' + (report.patient.name || '--') + '</td><th>Height</th><td>' + (report.patient.height || '--') + ' ' + (report.patient.heightUnit || 'cm') + '</td></tr>';
+    html += '<tr><th>Medication</th><td>' + medName + '</td><th>Dosage</th><td>' + (report.patient.dosage || '--') + '</td></tr>';
+    html += '<tr><th>Frequency</th><td>' + (report.patient.frequency || '--') + '</td><th>Start Date</th><td>' + (report.patient.startDate || '--') + '</td></tr></table>';
+
+    // Weight summary
+    html += '<h2>Weight Summary</h2>';
+    html += '<div class="stats-grid">';
+    html += '<div class="stat-box"><div class="stat-value">' + (report.weightSummary.currentWeight ? report.weightSummary.currentWeight.toFixed(1) : '--') + ' ' + unit + '</div><div class="stat-label">Current Weight</div></div>';
+    html += '<div class="stat-box"><div class="stat-value">' + (report.weightSummary.totalLost || 0) + ' ' + unit + '</div><div class="stat-label">Total Lost</div></div>';
+    html += '<div class="stat-box"><div class="stat-value">' + (report.weightSummary.bmi || '--') + '</div><div class="stat-label">BMI</div></div>';
+    html += '</div>';
+    html += '<div class="stats-grid">';
+    html += '<div class="stat-box"><div class="stat-value">' + (report.weightSummary.startWeight ? report.weightSummary.startWeight.toFixed(1) : '--') + ' ' + unit + '</div><div class="stat-label">Start Weight</div></div>';
+    html += '<div class="stat-box"><div class="stat-value">' + (report.weightSummary.rateOfLoss !== null ? report.weightSummary.rateOfLoss : '--') + ' ' + unit + '/wk</div><div class="stat-label">Rate of Loss (90d)</div></div>';
+    html += '<div class="stat-box"><div class="stat-value">' + report.weightSummary.progressPercent + '%</div><div class="stat-label">Goal Progress</div></div>';
+    html += '</div>';
+
+    // Recent weights
+    if (report.recentWeights.length > 0) {
+      html += '<h2>Recent Weight Entries (Last 90 Days)</h2>';
+      html += '<table><tr><th>Date</th><th>Weight (' + unit + ')</th><th>Notes</th></tr>';
+      report.recentWeights.forEach(w => {
+        html += '<tr><td>' + w.date + '</td><td>' + w.weight + '</td><td>' + (w.note || '') + '</td></tr>';
+      });
+      html += '</table>';
+    }
+
+    // Dose history
+    if (report.recentDoses.length > 0) {
+      html += '<h2>Dose History (Last 90 Days)</h2>';
+      html += '<table><tr><th>Date</th><th>Dose</th><th>Site</th><th>Side Effects</th></tr>';
+      report.recentDoses.forEach(d => {
+        const effects = d.sideEffects && d.sideEffects.length > 0 ? d.sideEffects.join(', ') : 'None';
+        html += '<tr><td>' + d.date + '</td><td>' + (d.dose || '') + ' ' + (d.doseUnit || 'mg') + '</td><td>' + (d.site || '--') + '</td><td>' + effects + '</td></tr>';
+      });
+      html += '</table>';
+    }
+
+    // Side effects summary
+    if (report.sideEffects && Object.keys(report.sideEffects).length > 0) {
+      html += '<h2>Side Effect Summary (All Time)</h2>';
+      html += '<table><tr><th>Side Effect</th><th>Occurrences</th></tr>';
+      Object.entries(report.sideEffects).sort((a, b) => b[1] - a[1]).forEach(([effect, count]) => {
+        html += '<tr><td>' + effect.replace('-', ' ') + '</td><td>' + count + '</td></tr>';
+      });
+      html += '</table>';
+    }
+
+    // Dose escalations
+    if (report.doseEscalations.length > 0) {
+      html += '<h2>Dose Escalation History</h2>';
+      html += '<table><tr><th>Date</th><th>From</th><th>To</th><th>Direction</th></tr>';
+      report.doseEscalations.forEach(e => {
+        html += '<tr><td>' + e.date + '</td><td>' + e.fromDose + ' ' + e.unit + '</td><td>' + e.toDose + ' ' + e.unit + '</td><td>' + e.direction + '</td></tr>';
+      });
+      html += '</table>';
+    }
+
+    // Latest measurements
+    if (report.latestMeasurements) {
+      const m = report.latestMeasurements;
+      html += '<h2>Latest Body Measurements</h2>';
+      html += '<table><tr><th>Date</th><th>Waist</th><th>Hips</th><th>Chest</th><th>Neck</th></tr>';
+      html += '<tr><td>' + m.date + '</td><td>' + (m.waist || '--') + ' cm</td><td>' + (m.hips || '--') + ' cm</td><td>' + (m.chest || '--') + ' cm</td><td>' + (m.neck || '--') + ' cm</td></tr></table>';
+    }
+
+    html += '<div class="footer">Generated by Jab It Weight Tracker | ' + report.reportDate + '</div>';
+    html += '</body></html>';
+
+    const reportWindow = window.open('', '_blank');
+    if (reportWindow) {
+      reportWindow.document.write(html);
+      reportWindow.document.close();
+      toast('Report generated! Use your browser\'s print function to save as PDF.', 'success');
+    } else {
+      toast('Pop-up blocked. Please allow pop-ups for this site.', 'error');
+    }
+  }
+
   // Public API
   return {
     init,
@@ -2568,6 +3339,13 @@ const App = (() => {
     removePhoto,
     removeVictory,
     viewPhotos,
+    editMeasurement: (id) => openMeasurementModal(id),
+    removeMeasurement,
+    editJournalEntry: (id) => openJournalModal(id),
+    removeJournalEntry,
+    editExercise: (id) => openExerciseModal(id),
+    removeExercise,
+    removeFast,
   };
 })();
 
