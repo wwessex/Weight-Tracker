@@ -11,6 +11,7 @@ const App = (() => {
   let isUiBound = false;
   let isHashListenerBound = false;
   let isGlobalListenersBound = false;
+  let isCriticalButtonFallbackBound = false;
   let isPhotoStorageChecked = false;
   const REMINDER_CHECK_INTERVAL_MS = 30 * 60 * 1000;
   const REMINDER_CATCH_UP_INTERVAL_MS = 2 * 60 * 60 * 1000;
@@ -32,6 +33,7 @@ const App = (() => {
   function init() {
     applyTheme();
     bindGlobalListeners();
+    bindCriticalButtonFallbacks();
 
     // Initialize auth (non-blocking, degrades gracefully if Supabase CDN failed)
     if (typeof Auth !== 'undefined') {
@@ -83,6 +85,43 @@ const App = (() => {
       navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
     }
     isGlobalListenersBound = true;
+  }
+
+  function bindCriticalButtonFallbacks() {
+    if (isCriticalButtonFallbackBound) return;
+
+    document.addEventListener('click', function (e) {
+      var target = e.target;
+      if (!target || !target.closest) return;
+
+      var obNewUserBtn = target.closest('#btn-ob-new-user');
+      if (obNewUserBtn) {
+        var chooser = document.getElementById('ob-screen-chooser');
+        var form = document.getElementById('ob-screen-form');
+        var signin = document.getElementById('ob-screen-signin');
+        if (chooser && form) {
+          chooser.style.display = 'none';
+          if (signin) signin.style.display = 'none';
+          form.style.display = '';
+        }
+      }
+
+      var openAuthBtn = target.closest('#btn-open-auth');
+      if (openAuthBtn) {
+        var authModal = document.getElementById('auth-modal');
+        var authForm = document.getElementById('auth-form');
+        var authSent = document.getElementById('auth-magic-link-sent');
+        var authEmail = document.getElementById('auth-email');
+        var sendBtn = document.getElementById('btn-send-magic-link');
+        if (authForm) authForm.style.display = '';
+        if (authSent) authSent.style.display = 'none';
+        if (authEmail) authEmail.value = '';
+        if (sendBtn) sendBtn.disabled = false;
+        if (authModal) openModal(authModal);
+      }
+    });
+
+    isCriticalButtonFallbackBound = true;
   }
 
   function bindUiOnce() {
