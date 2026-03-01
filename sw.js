@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jabit-v2';
+const CACHE_NAME = 'jabit-v3';
 const ASSETS = [
   './',
   './index.html',
