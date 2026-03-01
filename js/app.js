@@ -31,44 +31,67 @@ const App = (() => {
   }
 
   function init() {
-    applyTheme();
-    bindGlobalListeners();
-    bindCriticalButtonFallbacks();
+    var didShowApp = false;
+    try {
+      applyTheme();
+      bindGlobalListeners();
+      bindCriticalButtonFallbacks();
 
-    // Initialize auth (non-blocking, degrades gracefully if Supabase CDN failed)
-    if (typeof Auth !== 'undefined') {
-      Auth.init();
-      window.addEventListener('auth-state-change', handleAuthStateChange);
-    }
-    if (typeof Sync !== 'undefined') {
-      Sync.init();
-    }
-
-    // Check for restore param before deciding on onboarding
-    const params = new URLSearchParams(window.location.search);
-    if (params.has('restore')) {
-      const encoded = params.get('restore');
-      window.history.replaceState({}, '', window.location.pathname);
-      Store.importFromBackupLink(encoded).then(function (importResult) {
-        if (importResult.success) {
-          toast('Data restored from link!', 'success');
-          document.getElementById('onboarding-modal').style.display = 'none';
-          document.getElementById('app').style.display = '';
-          bootApp();
-        } else if (importResult.metadataOnly) {
-          toast('This is a metadata-only link. Use an encrypted backup file for full restore.', 'error');
-          showOnboardingOrApp();
-        } else {
-          showOnboardingOrApp();
+      // Initialize auth (non-blocking, degrades gracefully if Supabase CDN or config fails)
+      try {
+        if (typeof Auth !== 'undefined') {
+          Auth.init();
+          window.addEventListener('auth-state-change', handleAuthStateChange);
         }
-      }).catch(function () {
-        showOnboardingOrApp();
-      });
-    } else {
-      showOnboardingOrApp();
-    }
+      } catch (e) {
+        console.error('[App] Auth init failed (non-fatal):', e);
+      }
+      try {
+        if (typeof Sync !== 'undefined') {
+          Sync.init();
+        }
+      } catch (e) {
+        console.error('[App] Sync init failed (non-fatal):', e);
+      }
 
-    registerServiceWorker();
+      // Check for restore param before deciding on onboarding
+      const params = new URLSearchParams(window.location.search);
+      if (params.has('restore')) {
+        const encoded = params.get('restore');
+        window.history.replaceState({}, '', window.location.pathname);
+        Store.importFromBackupLink(encoded).then(function (importResult) {
+          if (importResult.success) {
+            toast('Data restored from link!', 'success');
+            document.getElementById('onboarding-modal').style.display = 'none';
+            document.getElementById('app').style.display = '';
+            bootApp();
+          } else if (importResult.metadataOnly) {
+            toast('This is a metadata-only link. Use an encrypted backup file for full restore.', 'error');
+            showOnboardingOrApp();
+          } else {
+            showOnboardingOrApp();
+          }
+        }).catch(function () {
+          showOnboardingOrApp();
+        });
+      } else {
+        showOnboardingOrApp();
+        didShowApp = true;
+      }
+
+      registerServiceWorker();
+    } catch (e) {
+      console.error('[App] Init error:', e);
+      if (!didShowApp) {
+        try {
+          showOnboardingOrApp();
+        } catch (e2) {
+          // Last resort: show onboarding modal raw so user isn't stuck on blank page
+          document.getElementById('onboarding-modal').style.display = 'flex';
+          document.getElementById('app').style.display = 'none';
+        }
+      }
+    }
   }
 
   function bootApp() {
@@ -119,6 +142,62 @@ const App = (() => {
         if (sendBtn) sendBtn.disabled = false;
         if (authModal) openModal(authModal);
       }
+
+      // Fallback: onboarding back buttons → return to chooser screen
+      if (target.closest('#btn-ob-back-form') || target.closest('#btn-ob-back-signin')) {
+        var chooser = document.getElementById('ob-screen-chooser');
+        var form = document.getElementById('ob-screen-form');
+        var signin = document.getElementById('ob-screen-signin');
+        if (chooser) chooser.style.display = '';
+        if (form) form.style.display = 'none';
+        if (signin) signin.style.display = 'none';
+      }
+
+      // Fallback: navigation tabs
+      var navTab = target.closest('.nav-tab[data-page]');
+      if (navTab && navTab.dataset.page) {
+        e.preventDefault();
+        try { navigateTo(navTab.dataset.page); } catch (err) {
+          window.location.hash = '#' + navTab.dataset.page;
+        }
+      }
+    });
+
+    // Fallback: onboarding form submit (skipped if primary handler already ran)
+    document.addEventListener('submit', function (e) {
+      var form = e.target;
+      if (!form || form.id !== 'onboarding-form' || form._handled) return;
+      e.preventDefault();
+
+      var name = (document.getElementById('ob-name').value || '').trim();
+      if (!name) return;
+
+      var profile = {
+        name: name,
+        height: document.getElementById('ob-height').value,
+        heightUnit: document.getElementById('ob-height-unit').value,
+        startWeight: document.getElementById('ob-weight').value,
+        startDate: new Date().toISOString().split('T')[0],
+        medication: document.getElementById('ob-medication').value,
+        age: '',
+      };
+      Store.saveProfile(profile);
+      Store.saveSettings(Object.assign({}, Store.getSettings(), {
+        weightUnit: document.getElementById('ob-weight-unit').value
+      }));
+      Store.saveGoals(Object.assign({}, Store.getGoals(), {
+        targetWeight: document.getElementById('ob-target').value
+      }));
+      Store.addWeight({
+        date: profile.startDate,
+        weight: profile.startWeight,
+        note: 'Starting weight',
+      });
+
+      document.getElementById('onboarding-modal').style.display = 'none';
+      document.getElementById('app').style.display = '';
+      bootApp();
+      toast('Welcome! Your journey starts now.', 'success');
     });
 
     isCriticalButtonFallbackBound = true;
@@ -268,6 +347,7 @@ const App = (() => {
 
     document.getElementById('onboarding-form').addEventListener('submit', function (e) {
       e.preventDefault();
+      e.target._handled = true;
       var profile = {
         name: document.getElementById('ob-name').value.trim(),
         height: document.getElementById('ob-height').value,
