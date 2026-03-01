@@ -146,6 +146,46 @@ const Store = (() => {
     }
   }
 
+  function generateId() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  // Generic CRUD factory for localStorage-backed collections
+  function createCollection(key, options) {
+    const sortFn = (options && options.sortFn) || sortByLocalDate;
+    const shouldInvalidate = !!(options && options.invalidateCache);
+
+    function getAll() { return get(key) || []; }
+    function saveAll(items) {
+      if (shouldInvalidate) _invalidateCache();
+      return set(key, items);
+    }
+    function add(entry) {
+      const items = getAll();
+      entry.id = generateId();
+      items.push(entry);
+      items.sort(sortFn);
+      saveAll(items);
+      return entry;
+    }
+    function update(id, updates) {
+      const items = getAll();
+      const idx = items.findIndex(item => item.id === id);
+      if (idx !== -1) {
+        items[idx] = { ...items[idx], ...updates };
+        items.sort(sortFn);
+        saveAll(items);
+      }
+      return items;
+    }
+    function remove(id) {
+      const items = getAll().filter(item => item.id !== id);
+      saveAll(items);
+      return items;
+    }
+    return { getAll, saveAll, add, update, remove };
+  }
+
   function openPhotoDb() {
     if (photoDbPromise) return photoDbPromise;
     photoDbPromise = new Promise((resolve, reject) => {
@@ -230,7 +270,7 @@ const Store = (() => {
     for (const legacyPhoto of legacyPhotos) {
       if (!legacyPhoto || !legacyPhoto.dataUrl) continue;
       const record = {
-        id: legacyPhoto.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+        id: legacyPhoto.id || generateId(),
         date: legacyPhoto.date || formatLocalDate(new Date()),
         note: legacyPhoto.note || '',
         blob: dataUrlToBlob(legacyPhoto.dataUrl),
@@ -260,122 +300,33 @@ const Store = (() => {
     return set(KEYS.PROFILE, profile);
   }
 
-  // Weight entries: [{ id, date, weight, note }]
-  function getWeights() {
-    return get(KEYS.WEIGHTS) || [];
-  }
-  function saveWeights(weights) {
-    _invalidateCache();
-    return set(KEYS.WEIGHTS, weights);
-  }
-  function addWeight(entry) {
-    const weights = getWeights();
-    entry.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-    weights.push(entry);
-    weights.sort(sortByLocalDate);
-    saveWeights(weights);
-    return entry;
-  }
-  function updateWeight(id, updates) {
-    const weights = getWeights();
-    const idx = weights.findIndex(w => w.id === id);
-    if (idx !== -1) {
-      weights[idx] = { ...weights[idx], ...updates };
-      weights.sort(sortByLocalDate);
-      saveWeights(weights);
-    }
-    return weights;
-  }
-  function deleteWeight(id) {
-    const weights = getWeights().filter(w => w.id !== id);
-    saveWeights(weights);
-    return weights;
-  }
+  // Entity collections via generic CRUD factory
+  const weightCol = createCollection(KEYS.WEIGHTS, { invalidateCache: true });
+  const getWeights = weightCol.getAll;
+  const saveWeights = weightCol.saveAll;
+  const addWeight = weightCol.add;
+  const updateWeight = weightCol.update;
+  const deleteWeight = weightCol.remove;
 
-  // Jab entries: [{ id, date, time, medication, dose, doseUnit, site, sideEffects, notes }]
-  function getJabs() {
-    return get(KEYS.JABS) || [];
-  }
-  function saveJabs(jabs) {
-    _invalidateCache();
-    return set(KEYS.JABS, jabs);
-  }
-  function addJab(entry) {
-    const jabs = getJabs();
-    entry.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-    jabs.push(entry);
-    jabs.sort(sortByLocalDate);
-    saveJabs(jabs);
-    return entry;
-  }
-  function updateJab(id, updates) {
-    const jabs = getJabs();
-    const idx = jabs.findIndex(j => j.id === id);
-    if (idx !== -1) {
-      jabs[idx] = { ...jabs[idx], ...updates };
-      jabs.sort(sortByLocalDate);
-      saveJabs(jabs);
-    }
-    return jabs;
-  }
-  function deleteJab(id) {
-    const jabs = getJabs().filter(j => j.id !== id);
-    saveJabs(jabs);
-    return jabs;
-  }
+  const jabCol = createCollection(KEYS.JABS, { invalidateCache: true });
+  const getJabs = jabCol.getAll;
+  const saveJabs = jabCol.saveAll;
+  const addJab = jabCol.add;
+  const updateJab = jabCol.update;
+  const deleteJab = jabCol.remove;
 
-  // Non-scale victories: [{ id, date, text, category }]
-  function getVictories() {
-    return get(KEYS.VICTORIES) || [];
-  }
-  function saveVictories(victories) {
-    return set(KEYS.VICTORIES, victories);
-  }
-  function addVictory(entry) {
-    const victories = getVictories();
-    entry.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-    victories.push(entry);
-    victories.sort(sortByLocalDate);
-    saveVictories(victories);
-    return entry;
-  }
-  function deleteVictory(id) {
-    const victories = getVictories().filter(v => v.id !== id);
-    saveVictories(victories);
-    return victories;
-  }
+  const victoryCol = createCollection(KEYS.VICTORIES);
+  const getVictories = victoryCol.getAll;
+  const saveVictories = victoryCol.saveAll;
+  const addVictory = victoryCol.add;
+  const deleteVictory = victoryCol.remove;
 
-  // Body measurements: [{ id, date, waist, hips, chest, armLeft, armRight, thighLeft, thighRight, neck, note }]
-  function getMeasurements() {
-    return get(KEYS.MEASUREMENTS) || [];
-  }
-  function saveMeasurements(measurements) {
-    _invalidateCache();
-    return set(KEYS.MEASUREMENTS, measurements);
-  }
-  function addMeasurement(entry) {
-    const measurements = getMeasurements();
-    entry.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-    measurements.push(entry);
-    measurements.sort(sortByLocalDate);
-    saveMeasurements(measurements);
-    return entry;
-  }
-  function updateMeasurement(id, updates) {
-    const measurements = getMeasurements();
-    const idx = measurements.findIndex(m => m.id === id);
-    if (idx !== -1) {
-      measurements[idx] = { ...measurements[idx], ...updates };
-      measurements.sort(sortByLocalDate);
-      saveMeasurements(measurements);
-    }
-    return measurements;
-  }
-  function deleteMeasurement(id) {
-    const measurements = getMeasurements().filter(m => m.id !== id);
-    saveMeasurements(measurements);
-    return measurements;
-  }
+  const measurementCol = createCollection(KEYS.MEASUREMENTS, { invalidateCache: true });
+  const getMeasurements = measurementCol.getAll;
+  const saveMeasurements = measurementCol.saveAll;
+  const addMeasurement = measurementCol.add;
+  const updateMeasurement = measurementCol.update;
+  const deleteMeasurement = measurementCol.remove;
   function getMeasurementStats() {
     const measurements = getMeasurements();
     if (measurements.length === 0) return null;
@@ -391,36 +342,12 @@ const Store = (() => {
     return { latest, first, changes, total: measurements.length };
   }
 
-  // Journal entries: [{ id, date, mood, energy, text }]
-  function getJournal() {
-    return get(KEYS.JOURNAL) || [];
-  }
-  function saveJournal(journal) {
-    return set(KEYS.JOURNAL, journal);
-  }
-  function addJournalEntry(entry) {
-    const journal = getJournal();
-    entry.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-    journal.push(entry);
-    journal.sort(sortByLocalDate);
-    saveJournal(journal);
-    return entry;
-  }
-  function updateJournalEntry(id, updates) {
-    const journal = getJournal();
-    const idx = journal.findIndex(j => j.id === id);
-    if (idx !== -1) {
-      journal[idx] = { ...journal[idx], ...updates };
-      journal.sort(sortByLocalDate);
-      saveJournal(journal);
-    }
-    return journal;
-  }
-  function deleteJournalEntry(id) {
-    const journal = getJournal().filter(j => j.id !== id);
-    saveJournal(journal);
-    return journal;
-  }
+  const journalCol = createCollection(KEYS.JOURNAL);
+  const getJournal = journalCol.getAll;
+  const saveJournal = journalCol.saveAll;
+  const addJournalEntry = journalCol.add;
+  const updateJournalEntry = journalCol.update;
+  const deleteJournalEntry = journalCol.remove;
   function getMoodTrend(days) {
     const journal = withNormalizedLocalDates(getJournal(), 'journal mood trend');
     if (journal.length === 0) return [];
@@ -431,26 +358,13 @@ const Store = (() => {
       .map(j => ({ date: j.date, mood: j.mood || null, energy: j.energy || null }));
   }
 
-  // Fasting entries: [{ id, startTime, endTime, targetHours, protocol, completed, note }]
-  function getFasts() {
-    return get(KEYS.FASTS) || [];
-  }
-  function saveFasts(fasts) {
-    return set(KEYS.FASTS, fasts);
-  }
-  function addFast(entry) {
-    const fasts = getFasts();
-    entry.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-    fasts.push(entry);
-    fasts.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
-    saveFasts(fasts);
-    return entry;
-  }
-  function deleteFast(id) {
-    const fasts = getFasts().filter(f => f.id !== id);
-    saveFasts(fasts);
-    return fasts;
-  }
+  const fastCol = createCollection(KEYS.FASTS, {
+    sortFn: (a, b) => new Date(a.startTime) - new Date(b.startTime),
+  });
+  const getFasts = fastCol.getAll;
+  const saveFasts = fastCol.saveAll;
+  const addFast = fastCol.add;
+  const deleteFast = fastCol.remove;
   function getActiveFast() {
     const settings = getSettings();
     return settings.activeFast || null;
@@ -466,9 +380,9 @@ const Store = (() => {
     saveSettings(settings);
   }
   function getFastingStats() {
-    const fasts = getFasts().filter(f => f.completed);
-    if (fasts.length === 0) return { totalFasts: 0, avgDuration: 0, longestFast: 0, completionRate: 0 };
     const allFasts = getFasts();
+    const fasts = allFasts.filter(f => f.completed);
+    if (fasts.length === 0) return { totalFasts: 0, avgDuration: 0, longestFast: 0, completionRate: 0 };
     const durations = fasts.map(f => {
       if (!f.startTime || !f.endTime) return 0;
       return (new Date(f.endTime) - new Date(f.startTime)) / (1000 * 60 * 60);
@@ -479,36 +393,12 @@ const Store = (() => {
     return { totalFasts: fasts.length, avgDuration, longestFast, completionRate };
   }
 
-  // Exercise entries: [{ id, date, type, duration, intensity, calories, note }]
-  function getExercises() {
-    return get(KEYS.EXERCISES) || [];
-  }
-  function saveExercises(exercises) {
-    return set(KEYS.EXERCISES, exercises);
-  }
-  function addExercise(entry) {
-    const exercises = getExercises();
-    entry.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-    exercises.push(entry);
-    exercises.sort(sortByLocalDate);
-    saveExercises(exercises);
-    return entry;
-  }
-  function updateExercise(id, updates) {
-    const exercises = getExercises();
-    const idx = exercises.findIndex(e => e.id === id);
-    if (idx !== -1) {
-      exercises[idx] = { ...exercises[idx], ...updates };
-      exercises.sort(sortByLocalDate);
-      saveExercises(exercises);
-    }
-    return exercises;
-  }
-  function deleteExercise(id) {
-    const exercises = getExercises().filter(e => e.id !== id);
-    saveExercises(exercises);
-    return exercises;
-  }
+  const exerciseCol = createCollection(KEYS.EXERCISES);
+  const getExercises = exerciseCol.getAll;
+  const saveExercises = exerciseCol.saveAll;
+  const addExercise = exerciseCol.add;
+  const updateExercise = exerciseCol.update;
+  const deleteExercise = exerciseCol.remove;
   function getExerciseStats(days) {
     const exercises = withNormalizedLocalDates(getExercises(), 'exercise stats');
     if (exercises.length === 0) return { totalMinutes: 0, sessions: 0, mostCommon: null, weeklyAvg: 0 };
@@ -598,7 +488,7 @@ const Store = (() => {
       for (const photo of photos) {
         if (!photo || !photo.dataUrl) continue;
         const req = store.put({
-          id: photo.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          id: photo.id || generateId(),
           date: photo.date,
           note: photo.note || '',
           blob: dataUrlToBlob(photo.dataUrl),
@@ -612,7 +502,7 @@ const Store = (() => {
   async function addPhoto(entry) {
     await ensurePhotoStorageReady();
     const photo = {
-      id: entry.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      id: entry.id || generateId(),
       date: entry.date,
       note: entry.note || '',
       blob: entry.blob || (entry.dataUrl ? dataUrlToBlob(entry.dataUrl) : null),
@@ -1007,6 +897,7 @@ const Store = (() => {
   }
 
   // Moving average calculation (windowDays default 28 = 4 weeks)
+  // Optimized O(n) sliding window instead of O(n²) nested filter
   function getMovingAverage(windowDays) {
     windowDays = windowDays || 28;
     if (_movingAvgCacheVersion === _cacheVersion && _movingAvgCache[windowDays]) {
@@ -1014,18 +905,27 @@ const Store = (() => {
     }
     const weights = withNormalizedLocalDates(getWeights(), 'moving-average weight entry');
     if (weights.length < 2) return [];
+    const windowMs = windowDays * 24 * 60 * 60 * 1000;
     const result = [];
+    let windowStart = 0;
+    let windowSum = 0;
+    let windowCount = 0;
+
     for (let i = 0; i < weights.length; i++) {
-      const endDate = weights[i]._localDate;
-      const startDate = new Date(endDate);
-      startDate.setDate(startDate.getDate() - windowDays);
-      const windowWeights = weights.filter(w => {
-        const d = w._localDate;
-        return d >= startDate && d <= endDate;
-      });
-      const avg = windowWeights.reduce((sum, w) => sum + parseFloat(w.weight), 0) / windowWeights.length;
-      result.push({ date: weights[i].date, avg: Math.round(avg * 10) / 10 });
+      const endTime = weights[i]._localDate.getTime();
+      const val = parseFloat(weights[i].weight);
+      windowSum += val;
+      windowCount++;
+
+      while (windowStart < i && (endTime - weights[windowStart]._localDate.getTime()) > windowMs) {
+        windowSum -= parseFloat(weights[windowStart].weight);
+        windowCount--;
+        windowStart++;
+      }
+
+      result.push({ date: weights[i].date, avg: Math.round((windowSum / windowCount) * 10) / 10 });
     }
+
     if (_movingAvgCacheVersion !== _cacheVersion) {
       _movingAvgCache = {};
       _movingAvgCacheVersion = _cacheVersion;
@@ -1359,7 +1259,7 @@ const Store = (() => {
           return null;
         }
         return {
-          id: toStringOrEmpty(entry.id) || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          id: toStringOrEmpty(entry.id) || generateId(),
           date,
           weight,
           note: toStringOrEmpty(entry.note),
@@ -1383,7 +1283,7 @@ const Store = (() => {
           ? entry.sideEffects.map(toStringOrEmpty).filter(Boolean)
           : [];
         return {
-          id: toStringOrEmpty(entry.id) || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          id: toStringOrEmpty(entry.id) || generateId(),
           date,
           time: toStringOrEmpty(entry.time),
           medication: toStringOrEmpty(entry.medication),
@@ -1409,7 +1309,7 @@ const Store = (() => {
           return null;
         }
         return {
-          id: toStringOrEmpty(entry.id) || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          id: toStringOrEmpty(entry.id) || generateId(),
           date,
           text,
           category: toStringOrEmpty(entry.category),
@@ -1430,7 +1330,7 @@ const Store = (() => {
           return null;
         }
         return {
-          id: toStringOrEmpty(entry.id) || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          id: toStringOrEmpty(entry.id) || generateId(),
           date,
           note: toStringOrEmpty(entry.note),
           dataUrl,
@@ -1444,7 +1344,7 @@ const Store = (() => {
         const date = toDateString(entry.date);
         if (!date) { result.warnings++; return null; }
         return {
-          id: toStringOrEmpty(entry.id) || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          id: toStringOrEmpty(entry.id) || generateId(),
           date,
           waist: toNumber(entry.waist),
           hips: toNumber(entry.hips),
@@ -1465,7 +1365,7 @@ const Store = (() => {
         const date = toDateString(entry.date);
         if (!date) { result.warnings++; return null; }
         return {
-          id: toStringOrEmpty(entry.id) || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          id: toStringOrEmpty(entry.id) || generateId(),
           date,
           mood: toNumber(entry.mood),
           energy: toNumber(entry.energy),
@@ -1479,7 +1379,7 @@ const Store = (() => {
         if (!isPlainObject(entry)) { result.warnings++; return null; }
         if (!entry.startTime) { result.warnings++; return null; }
         return {
-          id: toStringOrEmpty(entry.id) || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          id: toStringOrEmpty(entry.id) || generateId(),
           startTime: toStringOrEmpty(entry.startTime),
           endTime: toStringOrEmpty(entry.endTime),
           targetHours: toNumber(entry.targetHours) || 16,
@@ -1496,7 +1396,7 @@ const Store = (() => {
         const date = toDateString(entry.date);
         if (!date) { result.warnings++; return null; }
         return {
-          id: toStringOrEmpty(entry.id) || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          id: toStringOrEmpty(entry.id) || generateId(),
           date,
           type: toStringOrEmpty(entry.type),
           duration: toNumber(entry.duration),
