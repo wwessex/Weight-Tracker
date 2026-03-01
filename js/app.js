@@ -132,6 +132,12 @@ const App = (() => {
 
   // ===== ONBOARDING =====
   function initOnboarding() {
+    // Update unit labels when weight unit dropdown changes
+    const obWeightUnit = document.getElementById('ob-weight-unit');
+    obWeightUnit.addEventListener('change', () => {
+      document.querySelectorAll('.ob-weight-unit-label').forEach(el => el.textContent = obWeightUnit.value);
+    });
+
     document.getElementById('onboarding-form').addEventListener('submit', (e) => {
       e.preventDefault();
       const profile = {
