@@ -21,12 +21,16 @@ const App = (() => {
     bindGlobalListeners();
 
     // Initialize auth (non-blocking, degrades gracefully if Supabase CDN failed)
-    if (typeof Auth !== 'undefined') {
-      Auth.init();
-      window.addEventListener('auth-state-change', handleAuthStateChange);
-    }
-    if (typeof Sync !== 'undefined') {
-      Sync.init();
+    try {
+      if (typeof Auth !== 'undefined') {
+        Auth.init();
+        window.addEventListener('auth-state-change', handleAuthStateChange);
+      }
+      if (typeof Sync !== 'undefined') {
+        Sync.init();
+      }
+    } catch (e) {
+      console.error('[App] Auth/Sync init failed:', e);
     }
 
     const profile = Store.getProfile();
@@ -63,7 +67,7 @@ const App = (() => {
 
     // Wrap each page init in try-catch so a failure in one page
     // does not prevent event listeners from binding on other pages
-    const inits = [initNavigation, initSummaryPage, initDosesPage, initProgressPage, initJournalPage, initSettingsPage, initModals];
+    const inits = [initNavigation, initSummaryPage, initDosesPage, initProgressPage, initJournalPage, initSettingsPage, initAuthUI, initModals];
     inits.forEach(fn => {
       try { fn(); } catch (e) { console.error('[App] Init error in ' + fn.name + ':', e); }
     });
@@ -738,6 +742,102 @@ const App = (() => {
     } else {
       signedOut.style.display = '';
       signedIn.style.display = 'none';
+    }
+  }
+
+  function initAuthUI() {
+    const btnOpenAuth = document.getElementById('btn-open-auth');
+    if (btnOpenAuth) {
+      btnOpenAuth.addEventListener('click', function () {
+        const authModal = document.getElementById('auth-modal');
+        if (!authModal) return;
+        // Reset modal to input state
+        var form = document.getElementById('auth-form');
+        if (form) form.style.display = '';
+        var sent = document.getElementById('auth-magic-link-sent');
+        if (sent) sent.style.display = 'none';
+        var emailInput = document.getElementById('auth-email');
+        if (emailInput) emailInput.value = '';
+        var sendBtn = document.getElementById('btn-send-magic-link');
+        if (sendBtn) sendBtn.disabled = false;
+        openModal(authModal);
+      });
+    }
+
+    var authForm = document.getElementById('auth-form');
+    if (authForm) {
+      authForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var email = document.getElementById('auth-email').value.trim();
+        if (!email) return;
+        if (typeof Auth === 'undefined' || !Auth.getClient()) {
+          toast('Sign-in is not available. Supabase is not configured.', 'error');
+          return;
+        }
+        var sendBtn = document.getElementById('btn-send-magic-link');
+        if (sendBtn) sendBtn.disabled = true;
+        Auth.signInWithMagicLink(email).then(function (result) {
+          if (result.error) {
+            toast(result.error.message || 'Failed to send magic link.', 'error');
+            if (sendBtn) sendBtn.disabled = false;
+            return;
+          }
+          document.getElementById('auth-form').style.display = 'none';
+          document.getElementById('auth-magic-link-sent').style.display = '';
+          document.getElementById('auth-sent-email').textContent = email;
+        }).catch(function () {
+          toast('Failed to send magic link. Check your connection.', 'error');
+          if (sendBtn) sendBtn.disabled = false;
+        });
+      });
+    }
+
+    var authModalClose = document.getElementById('auth-modal-close');
+    if (authModalClose) {
+      authModalClose.addEventListener('click', function () {
+        closeModal(document.getElementById('auth-modal'));
+      });
+    }
+
+    // Close auth modal on backdrop click
+    var authModal = document.getElementById('auth-modal');
+    if (authModal) {
+      authModal.addEventListener('click', function (e) {
+        if (e.target === authModal) closeModal(authModal);
+      });
+    }
+
+    var btnSignOut = document.getElementById('btn-sign-out');
+    if (btnSignOut) {
+      btnSignOut.addEventListener('click', function () {
+        if (typeof Auth === 'undefined') return;
+        if (!confirm('Sign out? Your data will remain on this device.')) return;
+        Auth.signOut().then(function () {
+          updateAccountUI();
+        });
+      });
+    }
+
+    var btnSyncNow = document.getElementById('btn-sync-now');
+    if (btnSyncNow) {
+      btnSyncNow.addEventListener('click', function () {
+        if (typeof Auth === 'undefined' || typeof Sync === 'undefined' || !Auth.isLoggedIn()) return;
+        toast('Syncing...');
+        btnSyncNow.disabled = true;
+        Sync.pauseSync();
+        Sync.pullAll().then(function () {
+          return Sync.pushAll();
+        }).then(function () {
+          Sync.resumeSync();
+          toast('Sync complete!', 'success');
+          renderAllPages();
+          btnSyncNow.disabled = false;
+        }).catch(function () {
+          Sync.resumeSync();
+          toast('Sync failed. Please try again.', 'error');
+          btnSyncNow.disabled = false;
+        });
+      });
     }
   }
 
@@ -2512,93 +2612,6 @@ const App = (() => {
         });
       }
     });
-
-    // ===== Account / Auth Buttons =====
-    const btnOpenAuth = document.getElementById('btn-open-auth');
-    if (btnOpenAuth) {
-      btnOpenAuth.addEventListener('click', function () {
-        const authModal = document.getElementById('auth-modal');
-        // Reset modal to input state
-        document.getElementById('auth-form').style.display = '';
-        document.getElementById('auth-magic-link-sent').style.display = 'none';
-        document.getElementById('auth-email').value = '';
-        const sendBtn = document.getElementById('btn-send-magic-link');
-        if (sendBtn) sendBtn.disabled = false;
-        openModal(authModal);
-      });
-    }
-
-    const authForm = document.getElementById('auth-form');
-    if (authForm) {
-      authForm.addEventListener('submit', function (e) {
-        e.preventDefault();
-        const email = document.getElementById('auth-email').value.trim();
-        if (!email || typeof Auth === 'undefined') return;
-        const sendBtn = document.getElementById('btn-send-magic-link');
-        if (sendBtn) sendBtn.disabled = true;
-        Auth.signInWithMagicLink(email).then(function (result) {
-          if (result.error) {
-            toast(result.error.message || 'Failed to send magic link.', 'error');
-            if (sendBtn) sendBtn.disabled = false;
-            return;
-          }
-          document.getElementById('auth-form').style.display = 'none';
-          document.getElementById('auth-magic-link-sent').style.display = '';
-          document.getElementById('auth-sent-email').textContent = email;
-        }).catch(function () {
-          toast('Failed to send magic link. Check your connection.', 'error');
-          if (sendBtn) sendBtn.disabled = false;
-        });
-      });
-    }
-
-    const authModalClose = document.getElementById('auth-modal-close');
-    if (authModalClose) {
-      authModalClose.addEventListener('click', function () {
-        closeModal(document.getElementById('auth-modal'));
-      });
-    }
-
-    // Close auth modal on backdrop click
-    const authModal = document.getElementById('auth-modal');
-    if (authModal) {
-      authModal.addEventListener('click', function (e) {
-        if (e.target === authModal) closeModal(authModal);
-      });
-    }
-
-    const btnSignOut = document.getElementById('btn-sign-out');
-    if (btnSignOut) {
-      btnSignOut.addEventListener('click', function () {
-        if (typeof Auth === 'undefined') return;
-        if (!confirm('Sign out? Your data will remain on this device.')) return;
-        Auth.signOut().then(function () {
-          updateAccountUI();
-        });
-      });
-    }
-
-    const btnSyncNow = document.getElementById('btn-sync-now');
-    if (btnSyncNow) {
-      btnSyncNow.addEventListener('click', function () {
-        if (typeof Auth === 'undefined' || typeof Sync === 'undefined' || !Auth.isLoggedIn()) return;
-        toast('Syncing...');
-        btnSyncNow.disabled = true;
-        Sync.pauseSync();
-        Sync.pullAll().then(function () {
-          return Sync.pushAll();
-        }).then(function () {
-          Sync.resumeSync();
-          toast('Sync complete!', 'success');
-          renderAllPages();
-          btnSyncNow.disabled = false;
-        }).catch(function () {
-          Sync.resumeSync();
-          toast('Sync failed. Please try again.', 'error');
-          btnSyncNow.disabled = false;
-        });
-      });
-    }
 
     // Check for restore param on load
     const params = new URLSearchParams(window.location.search);
