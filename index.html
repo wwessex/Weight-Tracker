@@ -22,7 +22,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x2696;&#xFE0F;</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200' fill='none'><g transform='rotate(-35 100 100)'><rect x='78' y='8' width='44' height='10' rx='5' fill='%2314b8a6'/><rect x='94' y='18' width='12' height='26' rx='2' fill='%2314b8a6'/><rect x='78' y='44' width='44' height='80' rx='6' stroke='%2314b8a6' stroke-width='7' fill='none'/><rect x='82' y='82' width='36' height='38' rx='3' fill='%2314b8a6' opacity='0.2'/><line x1='83' y1='64' x2='104' y2='64' stroke='%2314b8a6' stroke-width='4' stroke-linecap='round'/><line x1='83' y1='82' x2='104' y2='82' stroke='%2314b8a6' stroke-width='4' stroke-linecap='round'/><line x1='83' y1='100' x2='104' y2='100' stroke='%2314b8a6' stroke-width='4' stroke-linecap='round'/><rect x='88' y='124' width='24' height='14' rx='2' fill='%2314b8a6'/><line x1='100' y1='138' x2='100' y2='185' stroke='%2314b8a6' stroke-width='5' stroke-linecap='round'/></g></svg>">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -36,6 +36,22 @@
   <div id="onboarding-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Welcome setup">
     <div class="modal">
       <div class="modal-header">
+        <div class="onboarding-logo">
+          <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" class="onboarding-logo-icon" aria-hidden="true">
+            <g transform="rotate(-35 100 100)">
+              <rect x="78" y="8" width="44" height="10" rx="5" fill="currentColor"/>
+              <rect x="94" y="18" width="12" height="26" rx="2" fill="currentColor"/>
+              <rect x="78" y="44" width="44" height="80" rx="6" stroke="currentColor" stroke-width="7" fill="none"/>
+              <rect x="82" y="82" width="36" height="38" rx="3" fill="currentColor" opacity="0.3"/>
+              <line x1="83" y1="64" x2="104" y2="64" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+              <line x1="83" y1="82" x2="104" y2="82" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+              <line x1="83" y1="100" x2="104" y2="100" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+              <rect x="88" y="124" width="24" height="14" rx="2" fill="currentColor"/>
+              <line x1="100" y1="138" x2="100" y2="185" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+            </g>
+          </svg>
+          <span class="onboarding-logo-text">Jab It</span>
+        </div>
         <h2>Welcome!</h2>
         <p>Let's set up your weight loss tracker</p>
       </div>
@@ -108,10 +124,24 @@
     <!-- App Header / Logo -->
     <header class="app-header">
       <div class="app-logo">
-        <div class="app-logo-mark" aria-hidden="true">JI</div>
+        <div class="app-logo-mark" aria-hidden="true">
+          <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" class="app-logo-icon">
+            <g transform="rotate(-35 100 100)">
+              <rect x="78" y="8" width="44" height="10" rx="5" fill="currentColor"/>
+              <rect x="94" y="18" width="12" height="26" rx="2" fill="currentColor"/>
+              <rect x="78" y="44" width="44" height="80" rx="6" stroke="currentColor" stroke-width="7" fill="none"/>
+              <rect x="82" y="82" width="36" height="38" rx="3" fill="currentColor" opacity="0.3"/>
+              <line x1="83" y1="64" x2="104" y2="64" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+              <line x1="83" y1="82" x2="104" y2="82" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+              <line x1="83" y1="100" x2="104" y2="100" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+              <rect x="88" y="124" width="24" height="14" rx="2" fill="currentColor"/>
+              <line x1="100" y1="138" x2="100" y2="185" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+            </g>
+          </svg>
+        </div>
         <div class="app-logo-text">
           <span class="app-logo-title">Jab It</span>
-          <span class="app-logo-subtitle">Modern Weight Tracker</span>
+          <span class="app-logo-subtitle">Weight Tracker</span>
         </div>
         <span class="app-logo-badge">Tracker</span>
       </div>
