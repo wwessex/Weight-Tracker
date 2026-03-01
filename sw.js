@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jabit-v6';
+const CACHE_NAME = 'jabit-v7';
 const ASSETS = [
   './',
   './index.html',
@@ -110,19 +110,20 @@ self.addEventListener('fetch', (event) => {
     && APP_SHELL_PATHS.has(requestUrl.pathname === '/' ? './' : `.${requestUrl.pathname}`);
 
   if (isAppShellRequest) {
+    // Stale-while-revalidate: serve cached version instantly, update cache in background
     event.respondWith(
       caches.match(event.request).then((cached) => {
-        if (cached) {
-          return cached;
-        }
+        const networkFetch = fetch(event.request)
+          .then((response) => {
+            if (isCacheableResponse(response)) {
+              const clone = response.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+            }
+            return response;
+          })
+          .catch(() => cached);
 
-        return fetch(event.request).then((response) => {
-          if (isCacheableResponse(response)) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
-          return response;
-        });
+        return cached || networkFetch;
       })
     );
     return;
