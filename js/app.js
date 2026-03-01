@@ -247,11 +247,8 @@ const App = (() => {
       fastingTimerInterval = null;
     }
 
-    if (page === 'summary') refreshSummary();
-    if (page === 'doses') refreshDoses();
-    if (page === 'progress') refreshProgress();
-    if (page === 'journal') refreshJournal();
-    if (page === 'settings') refreshSettings();
+    const refreshers = { summary: refreshSummary, doses: refreshDoses, progress: refreshProgress, journal: refreshJournal, settings: refreshSettings };
+    if (refreshers[page]) refreshers[page]();
   }
 
   function handleHashChange() {
@@ -457,6 +454,65 @@ const App = (() => {
   function destroyChart(chart) {
     if (chart) chart.destroy();
     return null;
+  }
+
+  // Animate a stat value or show a fallback placeholder
+  function displayStat(id, value, suffix, fallback) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (value != null) {
+      animateValue(el, value, 600, suffix || '');
+    } else {
+      el.textContent = fallback !== undefined ? fallback : '--';
+    }
+  }
+
+  // Shared chart tooltip configuration
+  function chartTooltipConfig(overrides) {
+    return {
+      backgroundColor: 'rgba(15,23,42,0.9)',
+      titleColor: '#f1f5f9',
+      bodyColor: '#e2e8f0',
+      cornerRadius: 10,
+      padding: 12,
+      ...overrides,
+    };
+  }
+
+  // Bind common modal close/cancel/backdrop handlers
+  function bindModal(modalId, closeBtnIds, formId, onSubmit) {
+    const modal = document.getElementById(modalId);
+    closeBtnIds.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('click', () => closeModal(modal));
+    });
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(modal); });
+    if (formId && onSubmit) {
+      document.getElementById(formId).addEventListener('submit', (e) => {
+        e.preventDefault();
+        onSubmit(e);
+      });
+    }
+    return modal;
+  }
+
+  // Initialize filter chip toggle groups
+  function initFilterChips(containerId, onChange) {
+    document.querySelectorAll('#' + containerId + ' .filter-chip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#' + containerId + ' .filter-chip').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        onChange(btn.dataset.range === 'all' ? 'all' : parseInt(btn.dataset.range));
+      });
+    });
+  }
+
+  // Filter normalized entries by date range
+  function filterByDateRange(entries, range) {
+    if (range === 'all') return entries;
+    const cutoff = parseLocalDate(new Date());
+    cutoff.setDate(cutoff.getDate() - range);
+    return entries.filter(e => e._localDate >= cutoff);
   }
 
   function medicationLabel(med) {
@@ -764,13 +820,7 @@ const App = (() => {
   // ===== INIT ALL EXTRA MODALS =====
   function initModals() {
     // NSV Modal
-    const nsvModal = document.getElementById('nsv-modal');
-    const nsvForm = document.getElementById('nsv-form');
-    document.getElementById('nsv-modal-close').addEventListener('click', () => closeModal(nsvModal));
-    document.getElementById('nsv-form-cancel').addEventListener('click', () => closeModal(nsvModal));
-    nsvModal.addEventListener('click', (e) => { if (e.target === nsvModal) closeModal(nsvModal); });
-    nsvForm.addEventListener('submit', (e) => {
-      e.preventDefault();
+    const nsvModal = bindModal('nsv-modal', ['nsv-modal-close', 'nsv-form-cancel'], 'nsv-form', () => {
       Store.addVictory({
         date: document.getElementById('nsv-date').value,
         category: document.getElementById('nsv-category').value,
@@ -782,13 +832,7 @@ const App = (() => {
     });
 
     // Photo Modal
-    const photoModal = document.getElementById('photo-modal');
-    const photoForm = document.getElementById('photo-form');
-    document.getElementById('photo-modal-close').addEventListener('click', () => closeModal(photoModal));
-    document.getElementById('photo-form-cancel').addEventListener('click', () => closeModal(photoModal));
-    photoModal.addEventListener('click', (e) => { if (e.target === photoModal) closeModal(photoModal); });
-    photoForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
+    const photoModal = bindModal('photo-modal', ['photo-modal-close', 'photo-form-cancel'], 'photo-form', async () => {
       const file = document.getElementById('photo-file').files[0];
       if (!file) return;
       const date = document.getElementById('photo-date').value;
@@ -829,24 +873,14 @@ const App = (() => {
     });
 
     // Photo Viewer
-    const viewerModal = document.getElementById('photo-viewer-modal');
-    document.getElementById('photo-viewer-close').addEventListener('click', () => closeModal(viewerModal));
-    viewerModal.addEventListener('click', (e) => { if (e.target === viewerModal) closeModal(viewerModal); });
+    bindModal('photo-viewer-modal', ['photo-viewer-close']);
 
     // Share Card Modal
-    const shareModal = document.getElementById('share-modal');
-    document.getElementById('share-modal-close').addEventListener('click', () => closeModal(shareModal));
-    shareModal.addEventListener('click', (e) => { if (e.target === shareModal) closeModal(shareModal); });
+    bindModal('share-modal', ['share-modal-close']);
     document.getElementById('btn-download-card').addEventListener('click', downloadShareCard);
 
     // Missed Dose Modal
-    const missedModal = document.getElementById('missed-dose-modal');
-    const missedForm = document.getElementById('missed-dose-form');
-    document.getElementById('missed-dose-modal-close').addEventListener('click', () => closeModal(missedModal));
-    document.getElementById('missed-dose-cancel').addEventListener('click', () => closeModal(missedModal));
-    missedModal.addEventListener('click', (e) => { if (e.target === missedModal) closeModal(missedModal); });
-    missedForm.addEventListener('submit', (e) => {
-      e.preventDefault();
+    const missedModal = bindModal('missed-dose-modal', ['missed-dose-modal-close', 'missed-dose-cancel'], 'missed-dose-form', () => {
       Store.addJab({
         date: document.getElementById('missed-dose-date').value,
         time: '',
@@ -959,41 +993,12 @@ const App = (() => {
     }
 
     // Stats grid with animated counters
-    if (stats.totalJabs > 0) {
-      animateValue(document.getElementById('sum-total-doses'), stats.totalJabs, 600, '');
-    } else {
-      document.getElementById('sum-total-doses').textContent = '0';
-    }
-
-    if (stats.totalLost) {
-      animateValue(document.getElementById('sum-weight-lost'), stats.totalLost, 600, ' ' + unit);
-    } else {
-      document.getElementById('sum-weight-lost').textContent = '--';
-    }
-
-    if (stats.currentWeight) {
-      animateValue(document.getElementById('sum-current'), stats.currentWeight, 600, ' ' + unit);
-    } else {
-      document.getElementById('sum-current').textContent = '--';
-    }
-
-    if (stats.weightToGo !== null) {
-      animateValue(document.getElementById('sum-to-goal'), stats.weightToGo, 600, ' ' + unit);
-    } else {
-      document.getElementById('sum-to-goal').textContent = '--';
-    }
-
-    if (stats.progressPercent > 0) {
-      animateValue(document.getElementById('sum-pct-lost'), stats.progressPercent, 600, '%');
-    } else {
-      document.getElementById('sum-pct-lost').textContent = '--';
-    }
-
-    if (stats.bmi) {
-      animateValue(document.getElementById('sum-bmi'), stats.bmi, 600, '');
-    } else {
-      document.getElementById('sum-bmi').textContent = '--';
-    }
+    displayStat('sum-total-doses', stats.totalJabs > 0 ? stats.totalJabs : null, '', '0');
+    displayStat('sum-weight-lost', stats.totalLost || null, ' ' + unit);
+    displayStat('sum-current', stats.currentWeight || null, ' ' + unit);
+    displayStat('sum-to-goal', stats.weightToGo, ' ' + unit);
+    displayStat('sum-pct-lost', stats.progressPercent > 0 ? stats.progressPercent : null, '%');
+    displayStat('sum-bmi', stats.bmi || null, '');
 
     // Projected goal date
     const projDate = Store.getProjectedGoalDate();
@@ -1065,10 +1070,7 @@ const App = (() => {
     const canvas = document.getElementById('sparkline-canvas');
     const changeEl = document.getElementById('sparkline-change');
 
-    const normalizedWeights = normalizeDateEntries(weights, 'weight trend entry');
-    const cutoff = parseLocalDate(new Date());
-    cutoff.setDate(cutoff.getDate() - 30);
-    const filtered = normalizedWeights.filter(w => w._localDate >= cutoff);
+    const filtered = filterByDateRange(normalizeDateEntries(weights, 'weight trend entry'), 30);
 
     if (filtered.length < 2) {
       card.style.display = 'none';
@@ -1225,9 +1227,7 @@ const App = (() => {
 
     // Show last 30 days on summary
     const normalizedWeights = normalizeDateEntries(weights, 'weight trend entry');
-    const cutoff = parseLocalDate(new Date());
-    cutoff.setDate(cutoff.getDate() - 30);
-    const filtered = normalizedWeights.filter(w => w._localDate >= cutoff);
+    const filtered = filterByDateRange(normalizedWeights, 30);
 
     const ctx = document.getElementById('chart-weight-summary').getContext('2d');
 
@@ -1315,19 +1315,14 @@ const App = (() => {
         interaction: { intersect: false, mode: 'index' },
         plugins: {
           legend: { display: showLegend, labels: { color: colors.textMuted, font: { size: 10 } } },
-          tooltip: {
-            backgroundColor: 'rgba(15,23,42,0.9)',
-            titleColor: '#f1f5f9',
-            bodyColor: '#e2e8f0',
+          tooltip: chartTooltipConfig({
             borderColor: 'rgba(99,102,241,0.3)',
             borderWidth: 1,
-            cornerRadius: 10,
-            padding: 12,
             displayColors: false,
             callbacks: {
               label: (c) => c.dataset.label + ': ' + c.parsed.y.toFixed(1) + ' ' + Store.getSettings().weightUnit,
             },
-          },
+          }),
         },
         scales: {
           x: {
@@ -1347,18 +1342,10 @@ const App = (() => {
 
   // ===== DOSES PAGE =====
   function initDosesPage() {
-    const doseModal = document.getElementById('dose-modal');
-    const doseForm = document.getElementById('dose-form');
-
     document.getElementById('btn-add-dose').addEventListener('click', () => openDoseModal());
     document.getElementById('btn-first-dose').addEventListener('click', () => openDoseModal());
 
-    document.getElementById('dose-modal-close').addEventListener('click', () => closeModal(doseModal));
-    document.getElementById('dose-form-cancel').addEventListener('click', () => closeModal(doseModal));
-    doseModal.addEventListener('click', (e) => { if (e.target === doseModal) closeModal(doseModal); });
-
-    doseForm.addEventListener('submit', (e) => {
-      e.preventDefault();
+    const doseModal = bindModal('dose-modal', ['dose-modal-close', 'dose-form-cancel'], 'dose-form', () => {
       const id = document.getElementById('dose-edit-id').value;
       const sideEffects = Array.from(document.querySelectorAll('input[name="side-effect"]:checked')).map(cb => cb.value);
       const entry = {
@@ -1383,14 +1370,9 @@ const App = (() => {
       refreshSummary();
     });
 
-    // Time filter chips
-    document.querySelectorAll('#dose-filters .filter-chip').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('#dose-filters .filter-chip').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentDoseRange = btn.dataset.range === 'all' ? 'all' : parseInt(btn.dataset.range);
-        refreshDoses();
-      });
+    initFilterChips('dose-filters', (range) => {
+      currentDoseRange = range;
+      refreshDoses();
     });
   }
 
@@ -1437,12 +1419,7 @@ const App = (() => {
     const list = document.getElementById('dose-list');
     const chartContainer = document.getElementById('dose-chart-container');
 
-    let filtered = normalizeDateEntries(jabs, 'dose chart/list entry');
-    if (currentDoseRange !== 'all') {
-      const cutoff = parseLocalDate(new Date());
-      cutoff.setDate(cutoff.getDate() - currentDoseRange);
-      filtered = filtered.filter(j => j._localDate >= cutoff);
-    }
+    let filtered = filterByDateRange(normalizeDateEntries(jabs, 'dose chart/list entry'), currentDoseRange);
 
     if (jabs.length === 0) {
       empty.style.display = '';
@@ -1521,19 +1498,14 @@ const App = (() => {
         animation: { duration: 800, easing: 'easeOutQuart' },
         plugins: {
           legend: { display: false },
-          tooltip: {
-            backgroundColor: 'rgba(15,23,42,0.9)',
-            titleColor: '#f1f5f9',
-            bodyColor: '#e2e8f0',
+          tooltip: chartTooltipConfig({
             borderColor: 'rgba(20,184,166,0.3)',
             borderWidth: 1,
-            cornerRadius: 10,
-            padding: 12,
             displayColors: false,
             callbacks: {
               label: (c) => c.parsed.y + ' ' + (jabs[c.dataIndex]?.doseUnit || 'mg'),
             },
-          },
+          }),
         },
         scales: {
           x: {
@@ -1671,17 +1643,9 @@ const App = (() => {
 
   // ===== PROGRESS PAGE =====
   async function initProgressPage() {
-    const weightModal = document.getElementById('weight-modal');
-    const weightForm = document.getElementById('weight-form');
-
     document.getElementById('btn-add-weight').addEventListener('click', () => openWeightModal());
 
-    document.getElementById('weight-modal-close').addEventListener('click', () => closeModal(weightModal));
-    document.getElementById('weight-form-cancel').addEventListener('click', () => closeModal(weightModal));
-    weightModal.addEventListener('click', (e) => { if (e.target === weightModal) closeModal(weightModal); });
-
-    weightForm.addEventListener('submit', (e) => {
-      e.preventDefault();
+    const weightModal = bindModal('weight-modal', ['weight-modal-close', 'weight-form-cancel'], 'weight-form', () => {
       const id = document.getElementById('weight-edit-id').value;
       const entry = {
         date: document.getElementById('weight-date').value,
@@ -1700,27 +1664,16 @@ const App = (() => {
       refreshSummary();
     });
 
-    // Time filter chips
-    document.querySelectorAll('#progress-filters .filter-chip').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('#progress-filters .filter-chip').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentProgressRange = btn.dataset.range === 'all' ? 'all' : parseInt(btn.dataset.range);
-        refreshProgress();
-      });
+    initFilterChips('progress-filters', (range) => {
+      currentProgressRange = range;
+      refreshProgress();
     });
 
     // Measurement button
     document.getElementById('btn-add-measurement').addEventListener('click', () => openMeasurementModal());
 
     // Measurement modal
-    const measurementModal = document.getElementById('measurement-modal');
-    const measurementForm = document.getElementById('measurement-form');
-    document.getElementById('measurement-modal-close').addEventListener('click', () => closeModal(measurementModal));
-    document.getElementById('measurement-form-cancel').addEventListener('click', () => closeModal(measurementModal));
-    measurementModal.addEventListener('click', (e) => { if (e.target === measurementModal) closeModal(measurementModal); });
-    measurementForm.addEventListener('submit', (e) => {
-      e.preventDefault();
+    const measurementModal = bindModal('measurement-modal', ['measurement-modal-close', 'measurement-form-cancel'], 'measurement-form', () => {
       const id = document.getElementById('measurement-edit-id').value;
       const entry = {
         date: document.getElementById('measurement-date').value,
@@ -1817,41 +1770,12 @@ const App = (() => {
     updateWeightUnitLabels();
 
     // Stats with animated counters
-    if (stats.currentWeight) {
-      animateValue(document.getElementById('prog-current'), stats.currentWeight, 600, ' ' + unit);
-    } else {
-      document.getElementById('prog-current').textContent = '--';
-    }
-
-    if (stats.startWeight) {
-      animateValue(document.getElementById('prog-start'), stats.startWeight, 600, ' ' + unit);
-    } else {
-      document.getElementById('prog-start').textContent = '--';
-    }
-
-    if (stats.totalLost) {
-      animateValue(document.getElementById('prog-total-lost'), stats.totalLost, 600, ' ' + unit);
-    } else {
-      document.getElementById('prog-total-lost').textContent = '--';
-    }
-
-    if (stats.progressPercent > 0) {
-      animateValue(document.getElementById('prog-pct-lost'), stats.progressPercent, 600, '%');
-    } else {
-      document.getElementById('prog-pct-lost').textContent = '--';
-    }
-
-    if (stats.weightToGo !== null) {
-      animateValue(document.getElementById('prog-to-goal'), stats.weightToGo, 600, ' ' + unit);
-    } else {
-      document.getElementById('prog-to-goal').textContent = '--';
-    }
-
-    if (stats.avgWeeklyLoss) {
-      animateValue(document.getElementById('prog-weekly-avg'), stats.avgWeeklyLoss, 600, ' ' + unit);
-    } else {
-      document.getElementById('prog-weekly-avg').textContent = '--';
-    }
+    displayStat('prog-current', stats.currentWeight || null, ' ' + unit);
+    displayStat('prog-start', stats.startWeight || null, ' ' + unit);
+    displayStat('prog-total-lost', stats.totalLost || null, ' ' + unit);
+    displayStat('prog-pct-lost', stats.progressPercent > 0 ? stats.progressPercent : null, '%');
+    displayStat('prog-to-goal', stats.weightToGo, ' ' + unit);
+    displayStat('prog-weekly-avg', stats.avgWeeklyLoss || null, ' ' + unit);
 
     // Weight count
     document.getElementById('weight-count').textContent = weights.length;
@@ -1870,12 +1794,7 @@ const App = (() => {
 
     // Filter weights
     const normalizedWeights = normalizeDateEntries(weights, 'progress weight entry');
-    let filtered = normalizedWeights;
-    if (currentProgressRange !== 'all') {
-      const cutoff = parseLocalDate(new Date());
-      cutoff.setDate(cutoff.getDate() - currentProgressRange);
-      filtered = normalizedWeights.filter(w => w._localDate >= cutoff);
-    }
+    const filtered = filterByDateRange(normalizedWeights, currentProgressRange);
 
     // Chart
     renderWeightFullChart(filtered);
@@ -2040,20 +1959,15 @@ const App = (() => {
               filter: (item) => !item.text.startsWith('Healthy'),
             },
           },
-          tooltip: {
-            backgroundColor: 'rgba(15,23,42,0.9)',
-            titleColor: '#f1f5f9',
-            bodyColor: '#e2e8f0',
+          tooltip: chartTooltipConfig({
             borderColor: 'rgba(99,102,241,0.3)',
             borderWidth: 1,
-            cornerRadius: 10,
-            padding: 12,
             displayColors: false,
             filter: (item) => !item.dataset.label.startsWith('Healthy'),
             callbacks: {
               label: (c) => c.dataset.label + ': ' + c.parsed.y.toFixed(1) + ' ' + Store.getSettings().weightUnit,
             },
-          },
+          }),
         },
         scales: {
           x: {
@@ -2746,14 +2660,9 @@ const App = (() => {
         animation: { duration: 800, easing: 'easeOutQuart' },
         plugins: {
           legend: { display: true, labels: { color: colors.textMuted, font: { size: 10 } } },
-          tooltip: {
-            backgroundColor: 'rgba(15,23,42,0.9)',
-            titleColor: '#f1f5f9',
-            bodyColor: '#e2e8f0',
-            cornerRadius: 10,
-            padding: 12,
+          tooltip: chartTooltipConfig({
             callbacks: { label: (c) => c.dataset.label + ': ' + c.parsed.y + ' cm' },
-          },
+          }),
         },
         scales: {
           x: { type: 'time', time: { tooltipFormat: 'dd MMM yyyy' }, grid: { display: false }, ticks: { color: colors.textMuted, font: { size: 10 }, maxTicksLimit: 6 } },
@@ -2772,32 +2681,22 @@ const App = (() => {
 
   // ===== JOURNAL PAGE =====
   function initJournalPage() {
-    // Journal modal
-    const journalModal = document.getElementById('journal-modal');
-    const journalForm = document.getElementById('journal-form');
     document.getElementById('btn-add-journal').addEventListener('click', () => openJournalModal());
-    document.getElementById('journal-modal-close').addEventListener('click', () => closeModal(journalModal));
-    document.getElementById('journal-form-cancel').addEventListener('click', () => closeModal(journalModal));
-    journalModal.addEventListener('click', (e) => { if (e.target === journalModal) closeModal(journalModal); });
 
-    // Mood picker buttons
-    document.querySelectorAll('#mood-picker .mood-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('#mood-picker .mood-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        document.getElementById('journal-mood').value = btn.dataset.value;
+    // Mood/energy picker toggle helper
+    function initPickerButtons(pickerId, hiddenInputId) {
+      document.querySelectorAll('#' + pickerId + ' .mood-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#' + pickerId + ' .mood-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          document.getElementById(hiddenInputId).value = btn.dataset.value;
+        });
       });
-    });
-    document.querySelectorAll('#energy-picker .mood-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('#energy-picker .mood-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        document.getElementById('journal-energy').value = btn.dataset.value;
-      });
-    });
+    }
+    initPickerButtons('mood-picker', 'journal-mood');
+    initPickerButtons('energy-picker', 'journal-energy');
 
-    journalForm.addEventListener('submit', (e) => {
-      e.preventDefault();
+    const journalModal = bindModal('journal-modal', ['journal-modal-close', 'journal-form-cancel'], 'journal-form', () => {
       const id = document.getElementById('journal-edit-id').value;
       const entry = {
         date: document.getElementById('journal-date').value,
@@ -2817,15 +2716,9 @@ const App = (() => {
     });
 
     // Exercise modal
-    const exerciseModal = document.getElementById('exercise-modal');
-    const exerciseForm = document.getElementById('exercise-form');
     document.getElementById('btn-add-exercise').addEventListener('click', () => openExerciseModal());
-    document.getElementById('exercise-modal-close').addEventListener('click', () => closeModal(exerciseModal));
-    document.getElementById('exercise-form-cancel').addEventListener('click', () => closeModal(exerciseModal));
-    exerciseModal.addEventListener('click', (e) => { if (e.target === exerciseModal) closeModal(exerciseModal); });
 
-    exerciseForm.addEventListener('submit', (e) => {
-      e.preventDefault();
+    const exerciseModal = bindModal('exercise-modal', ['exercise-modal-close', 'exercise-form-cancel'], 'exercise-form', () => {
       const id = document.getElementById('exercise-edit-id').value;
       const entry = {
         date: document.getElementById('exercise-date').value,
@@ -2846,7 +2739,7 @@ const App = (() => {
       refreshJournal();
     });
 
-    // Fasting timer
+    // Fasting timer protocol chips
     document.querySelectorAll('#fasting-protocols .protocol-chip').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('#fasting-protocols .protocol-chip').forEach(b => b.classList.remove('active'));
@@ -3005,7 +2898,7 @@ const App = (() => {
         animation: { duration: 600 },
         plugins: {
           legend: { display: true, labels: { color: colors.textMuted, font: { size: 10 } } },
-          tooltip: { backgroundColor: 'rgba(15,23,42,0.9)', titleColor: '#f1f5f9', bodyColor: '#e2e8f0', cornerRadius: 10, padding: 10 },
+          tooltip: chartTooltipConfig({ padding: 10 }),
         },
         scales: {
           x: { type: 'time', time: { tooltipFormat: 'dd MMM yyyy' }, grid: { display: false }, ticks: { color: colors.textMuted, font: { size: 10 }, maxTicksLimit: 6 } },
