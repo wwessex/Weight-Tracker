@@ -2054,6 +2054,334 @@ textarea:focus-visible {
   outline-offset: 2px;
 }
 
+/* ===== BODY MEASUREMENTS ===== */
+.measurement-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.measurement-stat-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  text-align: center;
+}
+
+.measurement-stat-label {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.measurement-stat-value {
+  display: block;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.measurement-stat-change {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.measurement-stat-change.loss { color: var(--success); }
+.measurement-stat-change.gain { color: var(--danger); }
+
+.measurement-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+}
+
+.measurement-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.measurement-item-date {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.measurement-item-values {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* ===== JOURNAL PAGE ===== */
+
+/* --- Mood Picker --- */
+.mood-picker {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.mood-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--bg-card);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mood-btn:hover {
+  border-color: var(--primary-light);
+  color: var(--primary);
+}
+
+.mood-btn.active {
+  background: var(--gradient-primary);
+  color: #fff;
+  border-color: var(--primary);
+  transform: scale(1.1);
+}
+
+.mood-btn.energy-btn.active {
+  background: linear-gradient(135deg, #f59e0b, #f97316);
+  border-color: #f59e0b;
+}
+
+/* --- Journal Entry List --- */
+.journal-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+}
+
+.journal-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.journal-item-date {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.journal-item-tags {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--primary);
+  margin-top: 2px;
+}
+
+.journal-item-text {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* --- Fasting Timer --- */
+.fasting-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+.fasting-protocols {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin: 12px 0;
+}
+
+.protocol-chip {
+  padding: 6px 16px;
+  border-radius: 20px;
+  border: 2px solid var(--border);
+  background: var(--bg-card);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.protocol-chip:hover {
+  border-color: var(--primary-light);
+  color: var(--primary);
+}
+
+.protocol-chip.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.fasting-timer-display {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  margin: 16px auto;
+}
+
+.fasting-ring-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.fasting-ring-value {
+  display: block;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.fasting-ring-sub {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.fasting-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+.fasting-stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* --- Fasting History --- */
+.fasting-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+}
+
+.fasting-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.fasting-item-date {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.fasting-item-detail {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* --- Exercise --- */
+.exercise-stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.exercise-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+}
+
+.exercise-item-icon {
+  font-size: 1.5rem;
+  width: 36px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.exercise-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.exercise-item-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.exercise-item-sub {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* --- Bottom nav adjustment for 5 tabs --- */
+.nav-tab {
+  padding: 8px 10px;
+  font-size: 0.65rem;
+}
+
+.nav-tab svg {
+  width: 20px;
+  height: 20px;
+}
+
+.nav-tab.active::before {
+  width: 40px;
+}
+
+/* --- Mood trend card --- */
+.mood-trend-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
 /* Reduce motion for users who prefer it */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

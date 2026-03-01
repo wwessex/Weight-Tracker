@@ -440,6 +440,18 @@
         </div>
       </div>
 
+      <!-- Body Measurements -->
+      <div class="section-header">
+        <h3 class="section-title">Body Measurements</h3>
+        <button class="btn btn-add" id="btn-add-measurement" aria-label="Add measurement">+ Measure</button>
+      </div>
+      <div class="chart-container" id="measurement-chart-container" style="display:none;">
+        <canvas id="chart-measurements"></canvas>
+      </div>
+      <div class="measurement-stats" id="measurement-stats" style="display:none;"></div>
+      <div id="measurement-list"></div>
+      <p class="empty-text" id="measurement-empty">Track body measurements to see changes beyond the scale!</p>
+
       <!-- Progress Photos -->
       <div class="section-header">
         <h3 class="section-title">Progress Photos</h3>
@@ -609,6 +621,7 @@
         <div class="settings-card">
           <div class="data-buttons">
             <p class="form-help" style="margin-top:10px;">Privacy tip: backup links are metadata-only and should not be used for full restore. Use <strong>Export Encrypted Backup</strong> for personal data, then share the file and passphrase separately.</p>
+            <button class="btn btn-outline btn-block" id="btn-doctor-report">Generate Doctor Visit Report</button>
             <button class="btn btn-outline btn-block" id="btn-export">Export Encrypted Backup (JSON)</button>
             <button class="btn btn-outline btn-block" id="btn-export-csv">Export Data (CSV)</button>
             <button class="btn btn-outline btn-block" id="btn-import">Import Backup File</button>
@@ -622,6 +635,243 @@
 
       <button class="btn btn-primary btn-block" id="btn-save-settings" type="button" style="margin-top:8px;">Save Settings</button>
     </section>
+
+    <!-- ===== Journal Page ===== -->
+    <section class="page" id="page-journal">
+      <div class="page-title">
+        <h1>Journal</h1>
+      </div>
+
+      <!-- Fasting Timer -->
+      <div class="fasting-card" id="fasting-card">
+        <h3 class="section-title">Fasting Timer</h3>
+        <div class="fasting-protocols" id="fasting-protocols">
+          <button class="protocol-chip active" data-protocol="16:8" data-hours="16">16:8</button>
+          <button class="protocol-chip" data-protocol="18:6" data-hours="18">18:6</button>
+          <button class="protocol-chip" data-protocol="20:4" data-hours="20">20:4</button>
+          <button class="protocol-chip" data-protocol="OMAD" data-hours="23">OMAD</button>
+        </div>
+        <div class="fasting-timer-display">
+          <canvas id="chart-fasting-ring" width="160" height="160" aria-label="Fasting timer"></canvas>
+          <div class="fasting-ring-label">
+            <span class="fasting-ring-value" id="fasting-timer-value">00:00:00</span>
+            <span class="fasting-ring-sub" id="fasting-timer-sub">ready</span>
+          </div>
+        </div>
+        <div class="fasting-actions">
+          <button class="btn btn-primary" id="btn-start-fast">Start Fast</button>
+          <button class="btn btn-outline" id="btn-end-fast" style="display:none;">End Fast</button>
+          <button class="btn btn-ghost" id="btn-cancel-fast" style="display:none;">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Fasting Stats -->
+      <div class="fasting-stats-row" id="fasting-stats-row" style="display:none;">
+        <div class="summary-stat"><div class="summary-stat-value" id="fast-total">0</div><div class="summary-stat-label">Completed</div></div>
+        <div class="summary-stat"><div class="summary-stat-value" id="fast-avg">0h</div><div class="summary-stat-label">Avg Duration</div></div>
+        <div class="summary-stat"><div class="summary-stat-value" id="fast-longest">0h</div><div class="summary-stat-label">Longest</div></div>
+        <div class="summary-stat"><div class="summary-stat-value" id="fast-rate">0%</div><div class="summary-stat-label">Completion</div></div>
+      </div>
+
+      <!-- Fasting History -->
+      <div class="section-header" id="fasting-history-header" style="display:none;">
+        <h3 class="section-title">Fasting History</h3>
+        <span class="entry-count" id="fast-count">0</span>
+      </div>
+      <div id="fasting-list"></div>
+
+      <!-- Quick Mood Entry -->
+      <div class="section-header" style="margin-top:16px;">
+        <h3 class="section-title">Mood & Energy</h3>
+        <button class="btn btn-add" id="btn-add-journal" aria-label="Add journal entry">+ Entry</button>
+      </div>
+      <div class="mood-trend-card" id="mood-trend-card" style="display:none;">
+        <canvas id="chart-mood-trend" height="120" aria-label="Mood trend chart"></canvas>
+      </div>
+      <div id="journal-list"></div>
+      <p class="empty-text" id="journal-empty">Track your mood and energy levels daily!</p>
+
+      <!-- Exercise Section -->
+      <div class="section-header" style="margin-top:16px;">
+        <h3 class="section-title">Exercise</h3>
+        <button class="btn btn-add" id="btn-add-exercise" aria-label="Add exercise">+ Log</button>
+      </div>
+      <div class="exercise-stats-row" id="exercise-stats-row" style="display:none;">
+        <div class="summary-stat"><div class="summary-stat-value" id="ex-sessions">0</div><div class="summary-stat-label">Sessions</div></div>
+        <div class="summary-stat"><div class="summary-stat-value" id="ex-minutes">0</div><div class="summary-stat-label">Minutes</div></div>
+        <div class="summary-stat"><div class="summary-stat-value" id="ex-weekly">0</div><div class="summary-stat-label">Per Week</div></div>
+      </div>
+      <div id="exercise-list"></div>
+      <p class="empty-text" id="exercise-empty">Log your workouts and activities!</p>
+    </section>
+
+    <!-- ===== Measurement Entry Modal ===== -->
+    <div id="measurement-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Log measurement">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 id="measurement-modal-title">Log Measurements</h3>
+          <button class="btn-close" id="measurement-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <form id="measurement-form" class="modal-body">
+          <input type="hidden" id="measurement-edit-id">
+          <div class="form-group">
+            <label for="measurement-date">Date</label>
+            <input type="date" id="measurement-date" required>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="measurement-waist">Waist (cm)</label>
+              <input type="number" id="measurement-waist" step="0.1" placeholder="--">
+            </div>
+            <div class="form-group">
+              <label for="measurement-hips">Hips (cm)</label>
+              <input type="number" id="measurement-hips" step="0.1" placeholder="--">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="measurement-chest">Chest (cm)</label>
+              <input type="number" id="measurement-chest" step="0.1" placeholder="--">
+            </div>
+            <div class="form-group">
+              <label for="measurement-neck">Neck (cm)</label>
+              <input type="number" id="measurement-neck" step="0.1" placeholder="--">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="measurement-arm-left">Arm L (cm)</label>
+              <input type="number" id="measurement-arm-left" step="0.1" placeholder="--">
+            </div>
+            <div class="form-group">
+              <label for="measurement-arm-right">Arm R (cm)</label>
+              <input type="number" id="measurement-arm-right" step="0.1" placeholder="--">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="measurement-thigh-left">Thigh L (cm)</label>
+              <input type="number" id="measurement-thigh-left" step="0.1" placeholder="--">
+            </div>
+            <div class="form-group">
+              <label for="measurement-thigh-right">Thigh R (cm)</label>
+              <input type="number" id="measurement-thigh-right" step="0.1" placeholder="--">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="measurement-note">Notes (optional)</label>
+            <textarea id="measurement-note" rows="2" placeholder="Any notes..."></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-ghost" id="measurement-form-cancel">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ===== Journal Entry Modal ===== -->
+    <div id="journal-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Journal entry">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 id="journal-modal-title">Journal Entry</h3>
+          <button class="btn-close" id="journal-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <form id="journal-form" class="modal-body">
+          <input type="hidden" id="journal-edit-id">
+          <div class="form-group">
+            <label for="journal-date">Date</label>
+            <input type="date" id="journal-date" required>
+          </div>
+          <div class="form-group">
+            <label>Mood</label>
+            <div class="mood-picker" id="mood-picker" role="group" aria-label="Mood rating">
+              <button type="button" class="mood-btn" data-value="1" title="Awful">1</button>
+              <button type="button" class="mood-btn" data-value="2" title="Bad">2</button>
+              <button type="button" class="mood-btn" data-value="3" title="Okay">3</button>
+              <button type="button" class="mood-btn" data-value="4" title="Good">4</button>
+              <button type="button" class="mood-btn" data-value="5" title="Great">5</button>
+            </div>
+            <input type="hidden" id="journal-mood" value="">
+          </div>
+          <div class="form-group">
+            <label>Energy</label>
+            <div class="mood-picker" id="energy-picker" role="group" aria-label="Energy rating">
+              <button type="button" class="mood-btn energy-btn" data-value="1" title="Very Low">1</button>
+              <button type="button" class="mood-btn energy-btn" data-value="2" title="Low">2</button>
+              <button type="button" class="mood-btn energy-btn" data-value="3" title="Normal">3</button>
+              <button type="button" class="mood-btn energy-btn" data-value="4" title="High">4</button>
+              <button type="button" class="mood-btn energy-btn" data-value="5" title="Very High">5</button>
+            </div>
+            <input type="hidden" id="journal-energy" value="">
+          </div>
+          <div class="form-group">
+            <label for="journal-text">How are you feeling?</label>
+            <textarea id="journal-text" rows="3" placeholder="Write about your day..."></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-ghost" id="journal-form-cancel">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ===== Exercise Entry Modal ===== -->
+    <div id="exercise-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Log exercise">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 id="exercise-modal-title">Log Exercise</h3>
+          <button class="btn-close" id="exercise-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <form id="exercise-form" class="modal-body">
+          <input type="hidden" id="exercise-edit-id">
+          <div class="form-group">
+            <label for="exercise-date">Date</label>
+            <input type="date" id="exercise-date" required>
+          </div>
+          <div class="form-group">
+            <label for="exercise-type">Activity</label>
+            <select id="exercise-type">
+              <option value="walking">Walking</option>
+              <option value="running">Running</option>
+              <option value="swimming">Swimming</option>
+              <option value="cycling">Cycling</option>
+              <option value="strength">Strength Training</option>
+              <option value="yoga">Yoga</option>
+              <option value="stretching">Stretching</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="exercise-duration">Duration (min)</label>
+              <input type="number" id="exercise-duration" min="1" placeholder="30" required>
+            </div>
+            <div class="form-group">
+              <label for="exercise-intensity">Intensity</label>
+              <select id="exercise-intensity">
+                <option value="light">Light</option>
+                <option value="moderate">Moderate</option>
+                <option value="vigorous">Vigorous</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="exercise-calories">Calories (optional)</label>
+            <input type="number" id="exercise-calories" min="0" placeholder="--">
+          </div>
+          <div class="form-group">
+            <label for="exercise-note">Notes (optional)</label>
+            <textarea id="exercise-note" rows="2" placeholder="How did it go?"></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-ghost" id="exercise-form-cancel">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <!-- ===== Dose Entry Modal ===== -->
     <div id="dose-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Log dose">
@@ -867,6 +1117,10 @@
       <a href="#progress" class="nav-tab" data-page="progress" role="tab" aria-selected="false">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
         <span>Progress</span>
+      </a>
+      <a href="#journal" class="nav-tab" data-page="journal" role="tab" aria-selected="false">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        <span>Journal</span>
       </a>
       <a href="#settings" class="nav-tab" data-page="settings" role="tab" aria-selected="false">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>

@@ -9,6 +9,10 @@ const Store = (() => {
     VICTORIES: 'shotsy_victories',
     PHOTOS: 'shotsy_photos',
     PHOTOS_MIGRATED: 'shotsy_photos_migrated_v1',
+    MEASUREMENTS: 'shotsy_measurements',
+    JOURNAL: 'shotsy_journal',
+    FASTS: 'shotsy_fasts',
+    EXERCISES: 'shotsy_exercises',
   };
 
   const PHOTO_DB = {
@@ -339,6 +343,231 @@ const Store = (() => {
     const victories = getVictories().filter(v => v.id !== id);
     saveVictories(victories);
     return victories;
+  }
+
+  // Body measurements: [{ id, date, waist, hips, chest, armLeft, armRight, thighLeft, thighRight, neck, note }]
+  function getMeasurements() {
+    return get(KEYS.MEASUREMENTS) || [];
+  }
+  function saveMeasurements(measurements) {
+    _invalidateCache();
+    return set(KEYS.MEASUREMENTS, measurements);
+  }
+  function addMeasurement(entry) {
+    const measurements = getMeasurements();
+    entry.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    measurements.push(entry);
+    measurements.sort(sortByLocalDate);
+    saveMeasurements(measurements);
+    return entry;
+  }
+  function updateMeasurement(id, updates) {
+    const measurements = getMeasurements();
+    const idx = measurements.findIndex(m => m.id === id);
+    if (idx !== -1) {
+      measurements[idx] = { ...measurements[idx], ...updates };
+      measurements.sort(sortByLocalDate);
+      saveMeasurements(measurements);
+    }
+    return measurements;
+  }
+  function deleteMeasurement(id) {
+    const measurements = getMeasurements().filter(m => m.id !== id);
+    saveMeasurements(measurements);
+    return measurements;
+  }
+  function getMeasurementStats() {
+    const measurements = getMeasurements();
+    if (measurements.length === 0) return null;
+    const latest = measurements[measurements.length - 1];
+    const first = measurements[0];
+    const fields = ['waist', 'hips', 'chest', 'armLeft', 'armRight', 'thighLeft', 'thighRight', 'neck'];
+    const changes = {};
+    fields.forEach(f => {
+      if (latest[f] && first[f]) {
+        changes[f] = Math.round((parseFloat(latest[f]) - parseFloat(first[f])) * 10) / 10;
+      }
+    });
+    return { latest, first, changes, total: measurements.length };
+  }
+
+  // Journal entries: [{ id, date, mood, energy, text }]
+  function getJournal() {
+    return get(KEYS.JOURNAL) || [];
+  }
+  function saveJournal(journal) {
+    return set(KEYS.JOURNAL, journal);
+  }
+  function addJournalEntry(entry) {
+    const journal = getJournal();
+    entry.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    journal.push(entry);
+    journal.sort(sortByLocalDate);
+    saveJournal(journal);
+    return entry;
+  }
+  function updateJournalEntry(id, updates) {
+    const journal = getJournal();
+    const idx = journal.findIndex(j => j.id === id);
+    if (idx !== -1) {
+      journal[idx] = { ...journal[idx], ...updates };
+      journal.sort(sortByLocalDate);
+      saveJournal(journal);
+    }
+    return journal;
+  }
+  function deleteJournalEntry(id) {
+    const journal = getJournal().filter(j => j.id !== id);
+    saveJournal(journal);
+    return journal;
+  }
+  function getMoodTrend(days) {
+    const journal = withNormalizedLocalDates(getJournal(), 'journal mood trend');
+    if (journal.length === 0) return [];
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - (days || 30));
+    return journal
+      .filter(j => j._localDate >= cutoff)
+      .map(j => ({ date: j.date, mood: j.mood || null, energy: j.energy || null }));
+  }
+
+  // Fasting entries: [{ id, startTime, endTime, targetHours, protocol, completed, note }]
+  function getFasts() {
+    return get(KEYS.FASTS) || [];
+  }
+  function saveFasts(fasts) {
+    return set(KEYS.FASTS, fasts);
+  }
+  function addFast(entry) {
+    const fasts = getFasts();
+    entry.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    fasts.push(entry);
+    fasts.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+    saveFasts(fasts);
+    return entry;
+  }
+  function deleteFast(id) {
+    const fasts = getFasts().filter(f => f.id !== id);
+    saveFasts(fasts);
+    return fasts;
+  }
+  function getActiveFast() {
+    const settings = getSettings();
+    return settings.activeFast || null;
+  }
+  function setActiveFast(fast) {
+    const settings = getSettings();
+    settings.activeFast = fast;
+    saveSettings(settings);
+  }
+  function clearActiveFast() {
+    const settings = getSettings();
+    delete settings.activeFast;
+    saveSettings(settings);
+  }
+  function getFastingStats() {
+    const fasts = getFasts().filter(f => f.completed);
+    if (fasts.length === 0) return { totalFasts: 0, avgDuration: 0, longestFast: 0, completionRate: 0 };
+    const allFasts = getFasts();
+    const durations = fasts.map(f => {
+      if (!f.startTime || !f.endTime) return 0;
+      return (new Date(f.endTime) - new Date(f.startTime)) / (1000 * 60 * 60);
+    }).filter(d => d > 0);
+    const avgDuration = durations.length > 0 ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length * 10) / 10 : 0;
+    const longestFast = durations.length > 0 ? Math.round(Math.max(...durations) * 10) / 10 : 0;
+    const completionRate = allFasts.length > 0 ? Math.round((fasts.length / allFasts.length) * 100) : 0;
+    return { totalFasts: fasts.length, avgDuration, longestFast, completionRate };
+  }
+
+  // Exercise entries: [{ id, date, type, duration, intensity, calories, note }]
+  function getExercises() {
+    return get(KEYS.EXERCISES) || [];
+  }
+  function saveExercises(exercises) {
+    return set(KEYS.EXERCISES, exercises);
+  }
+  function addExercise(entry) {
+    const exercises = getExercises();
+    entry.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    exercises.push(entry);
+    exercises.sort(sortByLocalDate);
+    saveExercises(exercises);
+    return entry;
+  }
+  function updateExercise(id, updates) {
+    const exercises = getExercises();
+    const idx = exercises.findIndex(e => e.id === id);
+    if (idx !== -1) {
+      exercises[idx] = { ...exercises[idx], ...updates };
+      exercises.sort(sortByLocalDate);
+      saveExercises(exercises);
+    }
+    return exercises;
+  }
+  function deleteExercise(id) {
+    const exercises = getExercises().filter(e => e.id !== id);
+    saveExercises(exercises);
+    return exercises;
+  }
+  function getExerciseStats(days) {
+    const exercises = withNormalizedLocalDates(getExercises(), 'exercise stats');
+    if (exercises.length === 0) return { totalMinutes: 0, sessions: 0, mostCommon: null, weeklyAvg: 0 };
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - (days || 30));
+    const filtered = exercises.filter(e => e._localDate >= cutoff);
+    if (filtered.length === 0) return { totalMinutes: 0, sessions: 0, mostCommon: null, weeklyAvg: 0 };
+    const totalMinutes = filtered.reduce((sum, e) => sum + (parseFloat(e.duration) || 0), 0);
+    const typeCounts = {};
+    filtered.forEach(e => { typeCounts[e.type] = (typeCounts[e.type] || 0) + 1; });
+    const mostCommon = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0];
+    const periodDays = (new Date() - cutoff) / (1000 * 60 * 60 * 24);
+    const weeklyAvg = periodDays > 0 ? Math.round((filtered.length / periodDays) * 7 * 10) / 10 : 0;
+    return { totalMinutes: Math.round(totalMinutes), sessions: filtered.length, mostCommon: mostCommon ? mostCommon[0] : null, weeklyAvg };
+  }
+
+  // Doctor visit report generator
+  function generateDoctorReport() {
+    const profile = getProfile();
+    const stats = getStats();
+    const settings = getSettings();
+    const goals = getGoals();
+    const weights = getWeights();
+    const jabs = getJabs();
+    const measurements = getMeasurements();
+    const sideEffects = getSideEffectTrends();
+    const escalations = getDoseEscalations();
+    const rateOfLoss = getRateOfLoss(90);
+    const cutoff90 = new Date();
+    cutoff90.setDate(cutoff90.getDate() - 90);
+    const cutoffStr = formatLocalDate(cutoff90);
+    return {
+      patient: {
+        name: profile.name,
+        height: profile.height,
+        heightUnit: profile.heightUnit,
+        medication: profile.medication,
+        dosage: profile.dosage,
+        frequency: profile.frequency,
+        startDate: profile.startDate,
+      },
+      weightSummary: {
+        startWeight: stats.startWeight,
+        currentWeight: stats.currentWeight,
+        totalLost: stats.totalLost ? Math.round(stats.totalLost * 10) / 10 : 0,
+        bmi: stats.bmi ? Math.round(stats.bmi * 10) / 10 : null,
+        rateOfLoss: rateOfLoss,
+        unit: settings.weightUnit,
+        targetWeight: goals.targetWeight,
+        progressPercent: Math.round(stats.progressPercent),
+      },
+      recentWeights: weights.filter(w => w.date >= cutoffStr).slice(-20),
+      recentDoses: jabs.filter(j => j.date >= cutoffStr),
+      sideEffects: sideEffects.effectCounts,
+      doseEscalations: escalations,
+      latestMeasurements: measurements.length > 0 ? measurements[measurements.length - 1] : null,
+      reportDate: formatLocalDate(new Date()),
+      daysOnPlan: stats.daysOnPlan,
+    };
   }
 
   // Progress photos: [{ id, date, note, dataUrl }]
@@ -938,6 +1167,10 @@ const Store = (() => {
       settings: getSettings(),
       victories: getVictories(),
       photos,
+      measurements: getMeasurements(),
+      journal: getJournal(),
+      fasts: getFasts(),
+      exercises: getExercises(),
       exportDate: new Date().toISOString(),
     }, null, 2);
   }
@@ -1042,26 +1275,44 @@ const Store = (() => {
   function exportCSV() {
     const weights = getWeights();
     const jabs = getJabs();
+    const measurements = getMeasurements();
+    const exercises = getExercises();
+    const journal = getJournal();
     const settings = getSettings();
 
-    let csv = 'Type,Date,Weight (' + settings.weightUnit + '),Note,Medication,Dose,Dose Unit,Site,Side Effects\n';
+    let csv = 'Type,Date,Weight (' + settings.weightUnit + '),Note,Medication,Dose,Dose Unit,Site,Side Effects,Waist,Hips,Chest,Exercise Type,Duration (min),Intensity,Mood,Energy\n';
 
-    // Merge weights and jabs by date
+    // Merge all entries by date
     const allEntries = [];
     weights.forEach(w => allEntries.push({ type: 'weight', date: w.date, data: w }));
     jabs.forEach(j => allEntries.push({ type: 'dose', date: j.date, data: j }));
+    measurements.forEach(m => allEntries.push({ type: 'measurement', date: m.date, data: m }));
+    exercises.forEach(e => allEntries.push({ type: 'exercise', date: e.date, data: e }));
+    journal.forEach(j => allEntries.push({ type: 'journal', date: j.date, data: j }));
     allEntries.sort(sortByLocalDate);
 
     allEntries.forEach(e => {
       if (e.type === 'weight') {
         const w = e.data;
         const note = (w.note || '').replace(/"/g, '""');
-        csv += 'Weight,' + w.date + ',' + w.weight + ',"' + note + '",,,,\n';
-      } else {
+        csv += 'Weight,' + w.date + ',' + w.weight + ',"' + note + '",,,,,,,,,,,,\n';
+      } else if (e.type === 'dose') {
         const j = e.data;
         const notes = (j.notes || '').replace(/"/g, '""');
         const effects = (j.sideEffects || []).join('; ');
-        csv += 'Dose,' + j.date + ',,"' + notes + '",' + (j.medication || '') + ',' + (j.dose || '') + ',' + (j.doseUnit || '') + ',' + (j.site || '') + ',"' + effects + '"\n';
+        csv += 'Dose,' + j.date + ',,"' + notes + '",' + (j.medication || '') + ',' + (j.dose || '') + ',' + (j.doseUnit || '') + ',' + (j.site || '') + ',"' + effects + '",,,,,,,,\n';
+      } else if (e.type === 'measurement') {
+        const m = e.data;
+        const note = (m.note || '').replace(/"/g, '""');
+        csv += 'Measurement,' + m.date + ',,"' + note + '",,,,,,,' + (m.waist || '') + ',' + (m.hips || '') + ',' + (m.chest || '') + ',,,,\n';
+      } else if (e.type === 'exercise') {
+        const ex = e.data;
+        const note = (ex.note || '').replace(/"/g, '""');
+        csv += 'Exercise,' + ex.date + ',,"' + note + '",,,,,,,,,' + (ex.type || '') + ',' + (ex.duration || '') + ',' + (ex.intensity || '') + ',,\n';
+      } else if (e.type === 'journal') {
+        const j = e.data;
+        const text = (j.text || '').replace(/"/g, '""');
+        csv += 'Journal,' + j.date + ',,"' + text + '",,,,,,,,,,,,,' + (j.mood || '') + ',' + (j.energy || '') + '\n';
       }
     });
 
@@ -1187,6 +1438,75 @@ const Store = (() => {
       }).filter(Boolean).sort(sortByLocalDate);
     }
 
+    function sanitizeMeasurements(measurements) {
+      return measurements.map(entry => {
+        if (!isPlainObject(entry)) { result.warnings++; return null; }
+        const date = toDateString(entry.date);
+        if (!date) { result.warnings++; return null; }
+        return {
+          id: toStringOrEmpty(entry.id) || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          date,
+          waist: toNumber(entry.waist),
+          hips: toNumber(entry.hips),
+          chest: toNumber(entry.chest),
+          armLeft: toNumber(entry.armLeft),
+          armRight: toNumber(entry.armRight),
+          thighLeft: toNumber(entry.thighLeft),
+          thighRight: toNumber(entry.thighRight),
+          neck: toNumber(entry.neck),
+          note: toStringOrEmpty(entry.note),
+        };
+      }).filter(Boolean).sort(sortByLocalDate);
+    }
+
+    function sanitizeJournal(journal) {
+      return journal.map(entry => {
+        if (!isPlainObject(entry)) { result.warnings++; return null; }
+        const date = toDateString(entry.date);
+        if (!date) { result.warnings++; return null; }
+        return {
+          id: toStringOrEmpty(entry.id) || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          date,
+          mood: toNumber(entry.mood),
+          energy: toNumber(entry.energy),
+          text: toStringOrEmpty(entry.text),
+        };
+      }).filter(Boolean).sort(sortByLocalDate);
+    }
+
+    function sanitizeFasts(fasts) {
+      return fasts.map(entry => {
+        if (!isPlainObject(entry)) { result.warnings++; return null; }
+        if (!entry.startTime) { result.warnings++; return null; }
+        return {
+          id: toStringOrEmpty(entry.id) || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          startTime: toStringOrEmpty(entry.startTime),
+          endTime: toStringOrEmpty(entry.endTime),
+          targetHours: toNumber(entry.targetHours) || 16,
+          protocol: toStringOrEmpty(entry.protocol),
+          completed: !!entry.completed,
+          note: toStringOrEmpty(entry.note),
+        };
+      }).filter(Boolean);
+    }
+
+    function sanitizeExercises(exercises) {
+      return exercises.map(entry => {
+        if (!isPlainObject(entry)) { result.warnings++; return null; }
+        const date = toDateString(entry.date);
+        if (!date) { result.warnings++; return null; }
+        return {
+          id: toStringOrEmpty(entry.id) || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          date,
+          type: toStringOrEmpty(entry.type),
+          duration: toNumber(entry.duration),
+          intensity: toStringOrEmpty(entry.intensity),
+          calories: toNumber(entry.calories),
+          note: toStringOrEmpty(entry.note),
+        };
+      }).filter(Boolean).sort(sortByLocalDate);
+    }
+
     try {
       const data = JSON.parse(jsonStr);
 
@@ -1281,6 +1601,38 @@ const Store = (() => {
         result.warnings++;
       } else {
         await savePhotos(sanitizePhotos(data.photos));
+      }
+
+      if (data.measurements === undefined) {
+        saveMeasurements([]);
+      } else if (!Array.isArray(data.measurements)) {
+        result.warnings++;
+      } else {
+        saveMeasurements(sanitizeMeasurements(data.measurements));
+      }
+
+      if (data.journal === undefined) {
+        saveJournal([]);
+      } else if (!Array.isArray(data.journal)) {
+        result.warnings++;
+      } else {
+        saveJournal(sanitizeJournal(data.journal));
+      }
+
+      if (data.fasts === undefined) {
+        saveFasts([]);
+      } else if (!Array.isArray(data.fasts)) {
+        result.warnings++;
+      } else {
+        saveFasts(sanitizeFasts(data.fasts));
+      }
+
+      if (data.exercises === undefined) {
+        saveExercises([]);
+      } else if (!Array.isArray(data.exercises)) {
+        result.warnings++;
+      } else {
+        saveExercises(sanitizeExercises(data.exercises));
       }
 
       result.success = true;
@@ -1408,6 +1760,7 @@ const Store = (() => {
     }
     photoDbPromise = null;
     photoMigrationPromise = null;
+    _invalidateCache();
   }
 
   return {
@@ -1417,6 +1770,11 @@ const Store = (() => {
     getVictories, saveVictories, addVictory, deleteVictory,
     ensurePhotoStorageReady,
     getPhotos, savePhotos, addPhoto, deletePhoto,
+    getMeasurements, saveMeasurements, addMeasurement, updateMeasurement, deleteMeasurement, getMeasurementStats,
+    getJournal, saveJournal, addJournalEntry, updateJournalEntry, deleteJournalEntry, getMoodTrend,
+    getFasts, saveFasts, addFast, deleteFast, getActiveFast, setActiveFast, clearActiveFast, getFastingStats,
+    getExercises, saveExercises, addExercise, updateExercise, deleteExercise, getExerciseStats,
+    generateDoctorReport,
     getGoals, saveGoals,
     getSettings, saveSettings,
     getStats, getStreakData, getMilestones, getProjectedGoalDate,
