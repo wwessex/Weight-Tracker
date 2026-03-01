@@ -142,6 +142,7 @@ const Store = (() => {
   function set(key, value) {
     try {
       localStorage.setItem(key, JSON.stringify(value));
+      window.dispatchEvent(new CustomEvent('store-mutation', { detail: { key: key } }));
       return true;
     } catch {
       return false;

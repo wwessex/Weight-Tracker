@@ -1,14 +1,18 @@
-const CACHE_NAME = 'jabit-v4';
+const CACHE_NAME = 'jabit-v5';
 const ASSETS = [
   './',
   './index.html',
   './css/style.css',
+  './js/config.js',
   './js/store.js',
+  './js/auth.js',
+  './js/sync.js',
   './js/app.js',
   './manifest.json',
   'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap',
   'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js',
   'https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js',
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js',
 ];
 
 const APP_SHELL_PATHS = new Set(ASSETS.filter((asset) => !asset.startsWith('http')));

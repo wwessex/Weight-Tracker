@@ -1,8 +1,8 @@
-# CLAUDE.md - Weight Tracker (Shotsy)
+# CLAUDE.md - Jab It
 
 ## Project Overview
 
-Weight Tracker (internal codename "Shotsy") is a mobile-first single-page application for tracking weight loss progress and GLP-1 medication doses (Semaglutide/Ozempic/Wegovy, Tirzepatide/Mounjaro/Zepbound, Liraglutide/Saxenda). All data is stored in browser localStorage. There is no backend, no database, and no user accounts.
+Jab It is a mobile-first single-page application for tracking weight loss progress and GLP-1 medication doses (Semaglutide/Ozempic/Wegovy, Tirzepatide/Mounjaro/Zepbound, Liraglutide/Saxenda). All data is stored in browser localStorage. There is no backend, no database, and no user accounts.
 
 ## Tech Stack
 

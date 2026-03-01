@@ -19,6 +19,16 @@ const App = (() => {
   function init() {
     applyTheme();
     bindGlobalListeners();
+
+    // Initialize auth (non-blocking, degrades gracefully if Supabase CDN failed)
+    if (typeof Auth !== 'undefined') {
+      Auth.init();
+      window.addEventListener('auth-state-change', handleAuthStateChange);
+    }
+    if (typeof Sync !== 'undefined') {
+      Sync.init();
+    }
+
     const profile = Store.getProfile();
     if (!profile.name) {
       document.getElementById('onboarding-modal').style.display = 'flex';
@@ -672,6 +682,63 @@ const App = (() => {
   function handleAppResume() {
     checkReminders({ source: 'resume', isCatchUp: true });
     ensureBackgroundReminderScheduling();
+    if (typeof Sync !== 'undefined' && typeof Auth !== 'undefined' && Auth.isLoggedIn()) {
+      Sync.syncOnResume();
+    }
+  }
+
+  // ===== AUTH / SYNC =====
+  function handleAuthStateChange(e) {
+    const event = e.detail.event;
+    const session = e.detail.session;
+
+    if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+      if (event === 'SIGNED_IN') {
+        toast('Signed in! Syncing your data...', 'success');
+        // Close auth modal if open
+        const authModal = document.getElementById('auth-modal');
+        if (authModal) closeModal(authModal);
+      }
+      if (typeof Sync !== 'undefined') {
+        // Pause sync listener during merge to avoid re-entrant pushes
+        Sync.pauseSync();
+        Sync.mergeOnSignIn().then(function () {
+          Sync.resumeSync();
+          if (event === 'SIGNED_IN') toast('Data synced!', 'success');
+          renderAllPages();
+        }).catch(function (err) {
+          Sync.resumeSync();
+          console.error('[App] Sync failed:', err);
+          toast('Sync failed. Your data is safe locally.', 'error');
+        });
+      }
+    }
+
+    if (event === 'SIGNED_OUT') {
+      toast('Signed out. Your data is still stored locally.', 'success');
+    }
+
+    updateAccountUI();
+  }
+
+  function updateAccountUI() {
+    const signedOut = document.getElementById('account-signed-out');
+    const signedIn = document.getElementById('account-signed-in');
+    if (!signedOut || !signedIn) return;
+
+    if (typeof Auth !== 'undefined' && Auth.isLoggedIn()) {
+      signedOut.style.display = 'none';
+      signedIn.style.display = '';
+      const user = Auth.getUser();
+      document.getElementById('account-email').textContent = (user && user.email) || 'Unknown';
+      const lastSync = typeof Sync !== 'undefined' ? Sync.getLastSyncTime() : null;
+      document.getElementById('account-last-sync').textContent = lastSync
+        ? 'Last synced ' + new Date(lastSync).toLocaleString()
+        : 'Never';
+    } else {
+      signedOut.style.display = '';
+      signedIn.style.display = 'none';
+    }
   }
 
   function handleServiceWorkerMessage(event) {
@@ -2446,6 +2513,93 @@ const App = (() => {
       }
     });
 
+    // ===== Account / Auth Buttons =====
+    const btnOpenAuth = document.getElementById('btn-open-auth');
+    if (btnOpenAuth) {
+      btnOpenAuth.addEventListener('click', function () {
+        const authModal = document.getElementById('auth-modal');
+        // Reset modal to input state
+        document.getElementById('auth-form').style.display = '';
+        document.getElementById('auth-magic-link-sent').style.display = 'none';
+        document.getElementById('auth-email').value = '';
+        const sendBtn = document.getElementById('btn-send-magic-link');
+        if (sendBtn) sendBtn.disabled = false;
+        openModal(authModal);
+      });
+    }
+
+    const authForm = document.getElementById('auth-form');
+    if (authForm) {
+      authForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const email = document.getElementById('auth-email').value.trim();
+        if (!email || typeof Auth === 'undefined') return;
+        const sendBtn = document.getElementById('btn-send-magic-link');
+        if (sendBtn) sendBtn.disabled = true;
+        Auth.signInWithMagicLink(email).then(function (result) {
+          if (result.error) {
+            toast(result.error.message || 'Failed to send magic link.', 'error');
+            if (sendBtn) sendBtn.disabled = false;
+            return;
+          }
+          document.getElementById('auth-form').style.display = 'none';
+          document.getElementById('auth-magic-link-sent').style.display = '';
+          document.getElementById('auth-sent-email').textContent = email;
+        }).catch(function () {
+          toast('Failed to send magic link. Check your connection.', 'error');
+          if (sendBtn) sendBtn.disabled = false;
+        });
+      });
+    }
+
+    const authModalClose = document.getElementById('auth-modal-close');
+    if (authModalClose) {
+      authModalClose.addEventListener('click', function () {
+        closeModal(document.getElementById('auth-modal'));
+      });
+    }
+
+    // Close auth modal on backdrop click
+    const authModal = document.getElementById('auth-modal');
+    if (authModal) {
+      authModal.addEventListener('click', function (e) {
+        if (e.target === authModal) closeModal(authModal);
+      });
+    }
+
+    const btnSignOut = document.getElementById('btn-sign-out');
+    if (btnSignOut) {
+      btnSignOut.addEventListener('click', function () {
+        if (typeof Auth === 'undefined') return;
+        if (!confirm('Sign out? Your data will remain on this device.')) return;
+        Auth.signOut().then(function () {
+          updateAccountUI();
+        });
+      });
+    }
+
+    const btnSyncNow = document.getElementById('btn-sync-now');
+    if (btnSyncNow) {
+      btnSyncNow.addEventListener('click', function () {
+        if (typeof Auth === 'undefined' || typeof Sync === 'undefined' || !Auth.isLoggedIn()) return;
+        toast('Syncing...');
+        btnSyncNow.disabled = true;
+        Sync.pauseSync();
+        Sync.pullAll().then(function () {
+          return Sync.pushAll();
+        }).then(function () {
+          Sync.resumeSync();
+          toast('Sync complete!', 'success');
+          renderAllPages();
+          btnSyncNow.disabled = false;
+        }).catch(function () {
+          Sync.resumeSync();
+          toast('Sync failed. Please try again.', 'error');
+          btnSyncNow.disabled = false;
+        });
+      });
+    }
+
     // Check for restore param on load
     const params = new URLSearchParams(window.location.search);
     if (params.has('restore')) {
@@ -2527,6 +2681,7 @@ const App = (() => {
 
     updateWeightUnitLabels();
     refreshReminderCapabilityStatus();
+    updateAccountUI();
   }
 
   // ===== BODY MEASUREMENTS =====
