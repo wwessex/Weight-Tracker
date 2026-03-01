@@ -186,9 +186,9 @@ const App = (() => {
       showObScreen(screenForm);
     });
 
-    // "Sign In" → returning user (only visible if Auth is available)
+    // "Sign In" → returning user (only visible if Auth is available and configured)
     var btnSignIn = document.getElementById('btn-ob-sign-in');
-    if (typeof Auth !== 'undefined') {
+    if (typeof Auth !== 'undefined' && Auth.isConfigured()) {
       btnSignIn.style.display = '';
       btnSignIn.addEventListener('click', function () {
         // Reset sign-in form state when navigating to it
@@ -264,7 +264,7 @@ const App = (() => {
       obSigninFormEl.addEventListener('submit', function (e) {
         e.preventDefault();
         var email = document.getElementById('ob-signin-email').value.trim();
-        if (!email || typeof Auth === 'undefined') return;
+        if (!email || typeof Auth === 'undefined' || !Auth.isConfigured()) return;
         var sendBtn = document.getElementById('btn-ob-send-magic-link');
         if (sendBtn) sendBtn.disabled = true;
         Auth.signInWithMagicLink(email).then(function (result) {
@@ -276,8 +276,8 @@ const App = (() => {
           document.getElementById('ob-signin-form').style.display = 'none';
           document.getElementById('ob-signin-sent').style.display = '';
           document.getElementById('ob-signin-sent-email').textContent = email;
-        }).catch(function () {
-          toast('Failed to send magic link. Check your connection.', 'error');
+        }).catch(function (err) {
+          toast((err && err.message) || 'Failed to send magic link. Check your connection.', 'error');
           if (sendBtn) sendBtn.disabled = false;
         });
       });
@@ -916,9 +916,18 @@ const App = (() => {
   function updateAccountUI() {
     const signedOut = document.getElementById('account-signed-out');
     const signedIn = document.getElementById('account-signed-in');
+    const accountSection = document.getElementById('settings-account');
     if (!signedOut || !signedIn) return;
 
-    if (typeof Auth !== 'undefined' && Auth.isLoggedIn()) {
+    // Hide entire account section if auth is not configured
+    if (typeof Auth === 'undefined' || !Auth.isConfigured()) {
+      if (accountSection) accountSection.style.display = 'none';
+      return;
+    }
+
+    if (accountSection) accountSection.style.display = '';
+
+    if (Auth.isLoggedIn()) {
       signedOut.style.display = 'none';
       signedIn.style.display = '';
       const user = Auth.getUser();
@@ -2725,7 +2734,7 @@ const App = (() => {
       authForm.addEventListener('submit', function (e) {
         e.preventDefault();
         const email = document.getElementById('auth-email').value.trim();
-        if (!email || typeof Auth === 'undefined') return;
+        if (!email || typeof Auth === 'undefined' || !Auth.isConfigured()) return;
         const sendBtn = document.getElementById('btn-send-magic-link');
         if (sendBtn) sendBtn.disabled = true;
         Auth.signInWithMagicLink(email).then(function (result) {
@@ -2737,8 +2746,8 @@ const App = (() => {
           document.getElementById('auth-form').style.display = 'none';
           document.getElementById('auth-magic-link-sent').style.display = '';
           document.getElementById('auth-sent-email').textContent = email;
-        }).catch(function () {
-          toast('Failed to send magic link. Check your connection.', 'error');
+        }).catch(function (err) {
+          toast((err && err.message) || 'Failed to send magic link. Check your connection.', 'error');
           if (sendBtn) sendBtn.disabled = false;
         });
       });
