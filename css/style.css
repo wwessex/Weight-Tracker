@@ -254,13 +254,17 @@ a { color: var(--primary); text-decoration: none; }
   align-items: center;
   justify-content: center;
   border-radius: 12px;
-  background: var(--gradient-primary);
+  background: var(--gradient-teal);
   color: #fff;
-  font-size: 0.9rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  box-shadow: var(--glow-primary);
+  box-shadow: 0 2px 8px rgba(20, 184, 166, 0.3);
   flex-shrink: 0;
+  padding: 6px;
+}
+
+.app-logo-icon {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .app-logo-text {
@@ -1690,6 +1694,26 @@ a { color: var(--primary); text-decoration: none; }
   padding: 28px 20px;
   flex-direction: column;
   align-items: flex-start;
+}
+
+.onboarding-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.onboarding-logo-icon {
+  width: 44px;
+  height: 44px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.onboarding-logo-text {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.02em;
 }
 
 #onboarding-modal .modal-header h2 {
