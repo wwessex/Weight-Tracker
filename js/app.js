@@ -51,13 +51,12 @@ const App = (() => {
   function bindUiOnce() {
     if (isUiBound) return;
 
-    initNavigation();
-    initSummaryPage();
-    initDosesPage();
-    initProgressPage();
-    initJournalPage();
-    initSettingsPage();
-    initModals();
+    // Wrap each page init in try-catch so a failure in one page
+    // does not prevent event listeners from binding on other pages
+    const inits = [initNavigation, initSummaryPage, initDosesPage, initProgressPage, initJournalPage, initSettingsPage, initModals];
+    inits.forEach(fn => {
+      try { fn(); } catch (e) { console.error('[App] Init error in ' + fn.name + ':', e); }
+    });
 
     if (!isPhotoStorageChecked) {
       isPhotoStorageChecked = true;
