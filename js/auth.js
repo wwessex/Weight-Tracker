@@ -21,14 +21,24 @@ const Auth = (() => {
       return;
     }
 
-    client = supabase.createClient(Config.SUPABASE_URL, Config.SUPABASE_ANON_KEY);
+    try {
+      client = supabase.createClient(Config.SUPABASE_URL, Config.SUPABASE_ANON_KEY);
+    } catch (e) {
+      console.warn('[Auth] Failed to create Supabase client:', e);
+      client = null;
+      return;
+    }
 
-    client.auth.onAuthStateChange((event, session) => {
-      currentSession = session;
-      window.dispatchEvent(new CustomEvent('auth-state-change', {
-        detail: { event: event, session: session },
-      }));
-    });
+    try {
+      client.auth.onAuthStateChange((event, session) => {
+        currentSession = session;
+        window.dispatchEvent(new CustomEvent('auth-state-change', {
+          detail: { event: event, session: session },
+        }));
+      });
+    } catch (e) {
+      console.warn('[Auth] Failed to subscribe to auth state changes:', e);
+    }
 
     // Restore existing session
     client.auth.getSession().then(function (result) {
