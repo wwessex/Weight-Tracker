@@ -108,74 +108,154 @@
   <!-- Onboarding Modal -->
   <div id="onboarding-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Welcome setup">
     <div class="modal">
-      <div class="modal-header">
-        <div class="onboarding-logo">
-          <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" class="onboarding-logo-icon" aria-hidden="true">
-            <g transform="rotate(-35 100 100)">
-              <rect x="78" y="8" width="44" height="10" rx="5" fill="currentColor"/>
-              <rect x="94" y="18" width="12" height="26" rx="2" fill="currentColor"/>
-              <rect x="78" y="44" width="44" height="80" rx="6" stroke="currentColor" stroke-width="7" fill="none"/>
-              <rect x="82" y="82" width="36" height="38" rx="3" fill="currentColor" opacity="0.3"/>
-              <line x1="83" y1="64" x2="104" y2="64" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-              <line x1="83" y1="82" x2="104" y2="82" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-              <line x1="83" y1="100" x2="104" y2="100" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-              <rect x="88" y="124" width="24" height="14" rx="2" fill="currentColor"/>
-              <line x1="100" y1="138" x2="100" y2="185" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
-            </g>
-          </svg>
-          <span class="onboarding-logo-text">Jab It</span>
+
+      <!-- Screen 1: Welcome Chooser -->
+      <div id="ob-screen-chooser">
+        <div class="modal-header">
+          <div class="onboarding-logo">
+            <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" class="onboarding-logo-icon" aria-hidden="true">
+              <g transform="rotate(-35 100 100)">
+                <rect x="78" y="8" width="44" height="10" rx="5" fill="currentColor"/>
+                <rect x="94" y="18" width="12" height="26" rx="2" fill="currentColor"/>
+                <rect x="78" y="44" width="44" height="80" rx="6" stroke="currentColor" stroke-width="7" fill="none"/>
+                <rect x="82" y="82" width="36" height="38" rx="3" fill="currentColor" opacity="0.3"/>
+                <line x1="83" y1="64" x2="104" y2="64" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+                <line x1="83" y1="82" x2="104" y2="82" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+                <line x1="83" y1="100" x2="104" y2="100" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+                <rect x="88" y="124" width="24" height="14" rx="2" fill="currentColor"/>
+                <line x1="100" y1="138" x2="100" y2="185" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+              </g>
+            </svg>
+            <span class="onboarding-logo-text">Jab It</span>
+          </div>
+          <h2>Welcome!</h2>
+          <p>Track your weight loss journey and medication doses</p>
         </div>
-        <h2>Welcome!</h2>
-        <p>Let's set up your weight loss tracker</p>
+        <div class="modal-body ob-chooser-body">
+          <button type="button" class="btn btn-primary btn-block" id="btn-ob-new-user">Get Started</button>
+          <button type="button" class="btn btn-outline btn-block" id="btn-ob-sign-in" style="display:none;">Sign In</button>
+          <p class="form-help ob-restore-link">Have a backup file? <a href="#" id="btn-ob-restore-link">Restore from backup</a></p>
+          <input type="file" id="ob-import-file" accept=".json,.gz" style="display:none;" aria-hidden="true">
+        </div>
       </div>
-      <form id="onboarding-form" class="modal-body">
-        <div class="form-group">
-          <label for="ob-name">Your Name</label>
-          <input type="text" id="ob-name" placeholder="Enter your name" required autocomplete="name">
+
+      <!-- Screen 2: New User Form -->
+      <div id="ob-screen-form" style="display:none;">
+        <div class="modal-header">
+          <div class="onboarding-logo">
+            <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" class="onboarding-logo-icon" aria-hidden="true">
+              <g transform="rotate(-35 100 100)">
+                <rect x="78" y="8" width="44" height="10" rx="5" fill="currentColor"/>
+                <rect x="94" y="18" width="12" height="26" rx="2" fill="currentColor"/>
+                <rect x="78" y="44" width="44" height="80" rx="6" stroke="currentColor" stroke-width="7" fill="none"/>
+                <rect x="82" y="82" width="36" height="38" rx="3" fill="currentColor" opacity="0.3"/>
+                <line x1="83" y1="64" x2="104" y2="64" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+                <line x1="83" y1="82" x2="104" y2="82" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+                <line x1="83" y1="100" x2="104" y2="100" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+                <rect x="88" y="124" width="24" height="14" rx="2" fill="currentColor"/>
+                <line x1="100" y1="138" x2="100" y2="185" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+              </g>
+            </svg>
+            <span class="onboarding-logo-text">Jab It</span>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm ob-back-btn" id="btn-ob-back-form">&larr; Back</button>
+          <h2>Let's Get Started</h2>
+          <p>Set up your weight loss tracker</p>
         </div>
-        <div class="form-row">
+        <form id="onboarding-form" class="modal-body">
           <div class="form-group">
-            <label for="ob-height">Height</label>
-            <input type="number" id="ob-height" placeholder="170" step="0.1" required>
+            <label for="ob-name">Your Name</label>
+            <input type="text" id="ob-name" placeholder="Enter your name" required autocomplete="name">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="ob-height">Height</label>
+              <input type="number" id="ob-height" placeholder="170" step="0.1" required>
+            </div>
+            <div class="form-group">
+              <label for="ob-height-unit">Unit</label>
+              <select id="ob-height-unit">
+                <option value="cm">cm</option>
+                <option value="ft">feet</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="ob-weight">Starting Weight (<span class="ob-weight-unit-label">kg</span>)</label>
+              <input type="number" id="ob-weight" placeholder="85" step="0.1" required>
+            </div>
+            <div class="form-group">
+              <label for="ob-weight-unit">Unit</label>
+              <select id="ob-weight-unit">
+                <option value="kg">Kilograms (kg)</option>
+                <option value="lbs">Pounds (lbs)</option>
+                <option value="st">Stone (st)</option>
+              </select>
+            </div>
           </div>
           <div class="form-group">
-            <label for="ob-height-unit">Unit</label>
-            <select id="ob-height-unit">
-              <option value="cm">cm</option>
-              <option value="ft">feet</option>
+            <label for="ob-target">Goal Weight (<span class="ob-weight-unit-label">kg</span>)</label>
+            <input type="number" id="ob-target" placeholder="70" step="0.1" required>
+          </div>
+          <div class="form-group">
+            <label for="ob-medication">Medication</label>
+            <select id="ob-medication">
+              <option value="semaglutide">Semaglutide (Ozempic/Wegovy)</option>
+              <option value="tirzepatide">Tirzepatide (Mounjaro/Zepbound)</option>
+              <option value="liraglutide">Liraglutide (Saxenda)</option>
+              <option value="other">Other</option>
+              <option value="none">No Medication</option>
             </select>
           </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="ob-weight">Starting Weight (<span class="ob-weight-unit-label">kg</span>)</label>
-            <input type="number" id="ob-weight" placeholder="85" step="0.1" required>
+          <button type="submit" class="btn btn-primary btn-block">Get Started</button>
+        </form>
+      </div>
+
+      <!-- Screen 3: Sign In (returning user) -->
+      <div id="ob-screen-signin" style="display:none;">
+        <div class="modal-header">
+          <div class="onboarding-logo">
+            <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" class="onboarding-logo-icon" aria-hidden="true">
+              <g transform="rotate(-35 100 100)">
+                <rect x="78" y="8" width="44" height="10" rx="5" fill="currentColor"/>
+                <rect x="94" y="18" width="12" height="26" rx="2" fill="currentColor"/>
+                <rect x="78" y="44" width="44" height="80" rx="6" stroke="currentColor" stroke-width="7" fill="none"/>
+                <rect x="82" y="82" width="36" height="38" rx="3" fill="currentColor" opacity="0.3"/>
+                <line x1="83" y1="64" x2="104" y2="64" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+                <line x1="83" y1="82" x2="104" y2="82" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+                <line x1="83" y1="100" x2="104" y2="100" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+                <rect x="88" y="124" width="24" height="14" rx="2" fill="currentColor"/>
+                <line x1="100" y1="138" x2="100" y2="185" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+              </g>
+            </svg>
+            <span class="onboarding-logo-text">Jab It</span>
           </div>
-          <div class="form-group">
-            <label for="ob-weight-unit">Unit</label>
-            <select id="ob-weight-unit">
-              <option value="kg">Kilograms (kg)</option>
-              <option value="lbs">Pounds (lbs)</option>
-              <option value="st">Stone (st)</option>
-            </select>
+          <button type="button" class="btn btn-ghost btn-sm ob-back-btn" id="btn-ob-back-signin">&larr; Back</button>
+          <h2>Welcome Back!</h2>
+          <p>Sign in to restore your data</p>
+        </div>
+        <div class="modal-body">
+          <form id="ob-signin-form">
+            <div class="form-group">
+              <label for="ob-signin-email">Email address</label>
+              <input type="email" id="ob-signin-email" placeholder="you@example.com" required autocomplete="email">
+            </div>
+            <button type="submit" class="btn btn-primary btn-block" id="btn-ob-send-magic-link">Send Magic Link</button>
+          </form>
+          <div id="ob-signin-sent" style="display:none;">
+            <div style="text-align:center;padding:20px 0;">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" aria-hidden="true"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
+              <h3 style="margin-top:12px;color:var(--success);">Check your email!</h3>
+              <p class="form-help">We sent a login link to <strong id="ob-signin-sent-email"></strong>. Click the link to sign in and restore your data.</p>
+              <p id="ob-signin-syncing" class="form-help" style="display:none;margin-top:12px;color:var(--primary);">Syncing your data...</p>
+            </div>
           </div>
+          <div class="ob-divider"><span>or</span></div>
+          <p class="form-help" style="text-align:center;">Have a backup file instead? <a href="#" id="btn-ob-restore-link-signin">Restore from backup</a></p>
         </div>
-        <div class="form-group">
-          <label for="ob-target">Goal Weight (<span class="ob-weight-unit-label">kg</span>)</label>
-          <input type="number" id="ob-target" placeholder="70" step="0.1" required>
-        </div>
-        <div class="form-group">
-          <label for="ob-medication">Medication</label>
-          <select id="ob-medication">
-            <option value="semaglutide">Semaglutide (Ozempic/Wegovy)</option>
-            <option value="tirzepatide">Tirzepatide (Mounjaro/Zepbound)</option>
-            <option value="liraglutide">Liraglutide (Saxenda)</option>
-            <option value="other">Other</option>
-            <option value="none">No Medication</option>
-          </select>
-        </div>
-        <button type="submit" class="btn btn-primary btn-block">Get Started</button>
-      </form>
+      </div>
+
     </div>
   </div>
 

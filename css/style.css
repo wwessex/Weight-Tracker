@@ -1695,6 +1695,7 @@ a { color: var(--primary); text-decoration: none; }
   padding: 28px 20px;
   flex-direction: column;
   align-items: flex-start;
+  position: relative;
 }
 
 .onboarding-logo {
@@ -1724,6 +1725,62 @@ a { color: var(--primary); text-decoration: none; }
 
 #onboarding-modal .modal-header p {
   color: rgba(255, 255, 255, 0.8);
+}
+
+/* --- Onboarding Multi-Screen --- */
+#ob-screen-chooser,
+#ob-screen-form,
+#ob-screen-signin {
+  animation: obScreenIn 0.3s ease;
+}
+
+@keyframes obScreenIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ob-chooser-body {
+  padding-bottom: 28px;
+}
+
+.ob-back-btn {
+  position: absolute;
+  top: 12px;
+  left: 8px;
+  color: rgba(255, 255, 255, 0.85);
+  z-index: 1;
+}
+
+.ob-back-btn:hover {
+  color: #fff;
+}
+
+.ob-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ob-divider::before,
+.ob-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.ob-restore-link {
+  text-align: center;
+  margin-top: 16px;
+}
+
+.ob-restore-link a {
+  color: var(--primary);
 }
 
 /* --- Tour Overlay --- */

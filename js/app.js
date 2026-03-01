@@ -16,6 +16,19 @@ const App = (() => {
   const REMINDER_CATCH_UP_INTERVAL_MS = 2 * 60 * 60 * 1000;
 
   // ===== INIT =====
+  function showOnboardingOrApp() {
+    const profile = Store.getProfile();
+    if (!profile.name) {
+      document.getElementById('onboarding-modal').style.display = 'flex';
+      document.getElementById('app').style.display = 'none';
+      initOnboarding();
+    } else {
+      document.getElementById('onboarding-modal').style.display = 'none';
+      document.getElementById('app').style.display = '';
+      bootApp();
+    }
+  }
+
   function init() {
     applyTheme();
     bindGlobalListeners();
@@ -29,16 +42,30 @@ const App = (() => {
       Sync.init();
     }
 
-    const profile = Store.getProfile();
-    if (!profile.name) {
-      document.getElementById('onboarding-modal').style.display = 'flex';
-      document.getElementById('app').style.display = 'none';
-      initOnboarding();
+    // Check for restore param before deciding on onboarding
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('restore')) {
+      const encoded = params.get('restore');
+      window.history.replaceState({}, '', window.location.pathname);
+      Store.importFromBackupLink(encoded).then(function (importResult) {
+        if (importResult.success) {
+          toast('Data restored from link!', 'success');
+          document.getElementById('onboarding-modal').style.display = 'none';
+          document.getElementById('app').style.display = '';
+          bootApp();
+        } else if (importResult.metadataOnly) {
+          toast('This is a metadata-only link. Use an encrypted backup file for full restore.', 'error');
+          showOnboardingOrApp();
+        } else {
+          showOnboardingOrApp();
+        }
+      }).catch(function () {
+        showOnboardingOrApp();
+      });
     } else {
-      document.getElementById('onboarding-modal').style.display = 'none';
-      document.getElementById('app').style.display = '';
-      bootApp();
+      showOnboardingOrApp();
     }
+
     registerServiceWorker();
   }
 
@@ -141,15 +168,68 @@ const App = (() => {
 
   // ===== ONBOARDING =====
   function initOnboarding() {
-    // Update unit labels when weight unit dropdown changes
-    const obWeightUnit = document.getElementById('ob-weight-unit');
-    obWeightUnit.addEventListener('change', () => {
-      document.querySelectorAll('.ob-weight-unit-label').forEach(el => el.textContent = obWeightUnit.value);
+    var screenChooser = document.getElementById('ob-screen-chooser');
+    var screenForm = document.getElementById('ob-screen-form');
+    var screenSignin = document.getElementById('ob-screen-signin');
+
+    // --- Screen navigation ---
+    function showObScreen(screen) {
+      screenChooser.style.display = 'none';
+      screenForm.style.display = 'none';
+      screenSignin.style.display = 'none';
+      screen.style.display = '';
+      screen.closest('.modal').scrollTop = 0;
+    }
+
+    // "Get Started" → new user form
+    document.getElementById('btn-ob-new-user').addEventListener('click', function () {
+      showObScreen(screenForm);
     });
 
-    document.getElementById('onboarding-form').addEventListener('submit', (e) => {
+    // "Sign In" → returning user (only visible if Auth is available)
+    var btnSignIn = document.getElementById('btn-ob-sign-in');
+    if (typeof Auth !== 'undefined') {
+      btnSignIn.style.display = '';
+      btnSignIn.addEventListener('click', function () {
+        // Reset sign-in form state when navigating to it
+        var obSigninForm = document.getElementById('ob-signin-form');
+        var obSigninSent = document.getElementById('ob-signin-sent');
+        if (obSigninForm) obSigninForm.style.display = '';
+        if (obSigninSent) obSigninSent.style.display = 'none';
+        var sendBtn = document.getElementById('btn-ob-send-magic-link');
+        if (sendBtn) sendBtn.disabled = false;
+        showObScreen(screenSignin);
+      });
+    }
+
+    // Back buttons
+    document.getElementById('btn-ob-back-form').addEventListener('click', function () {
+      showObScreen(screenChooser);
+    });
+    document.getElementById('btn-ob-back-signin').addEventListener('click', function () {
+      showObScreen(screenChooser);
+    });
+
+    // "Restore from backup" links (on chooser and sign-in screens)
+    var obImportFile = document.getElementById('ob-import-file');
+    document.getElementById('btn-ob-restore-link').addEventListener('click', function (e) {
       e.preventDefault();
-      const profile = {
+      obImportFile.click();
+    });
+    document.getElementById('btn-ob-restore-link-signin').addEventListener('click', function (e) {
+      e.preventDefault();
+      obImportFile.click();
+    });
+
+    // --- Existing onboarding form logic ---
+    var obWeightUnit = document.getElementById('ob-weight-unit');
+    obWeightUnit.addEventListener('change', function () {
+      document.querySelectorAll('.ob-weight-unit-label').forEach(function (el) { el.textContent = obWeightUnit.value; });
+    });
+
+    document.getElementById('onboarding-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var profile = {
         name: document.getElementById('ob-name').value.trim(),
         height: document.getElementById('ob-height').value,
         heightUnit: document.getElementById('ob-height-unit').value,
@@ -160,10 +240,10 @@ const App = (() => {
       };
       Store.saveProfile(profile);
 
-      const weightUnit = document.getElementById('ob-weight-unit').value;
+      var weightUnit = document.getElementById('ob-weight-unit').value;
       Store.saveSettings({ ...Store.getSettings(), weightUnit });
 
-      const targetWeight = document.getElementById('ob-target').value;
+      var targetWeight = document.getElementById('ob-target').value;
       Store.saveGoals({ ...Store.getGoals(), targetWeight });
 
       Store.addWeight({
@@ -176,6 +256,85 @@ const App = (() => {
       document.getElementById('app').style.display = '';
       bootApp();
       toast('Welcome! Your journey starts now.', 'success');
+    });
+
+    // --- Sign-in form (magic link) ---
+    var obSigninFormEl = document.getElementById('ob-signin-form');
+    if (obSigninFormEl) {
+      obSigninFormEl.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var email = document.getElementById('ob-signin-email').value.trim();
+        if (!email || typeof Auth === 'undefined') return;
+        var sendBtn = document.getElementById('btn-ob-send-magic-link');
+        if (sendBtn) sendBtn.disabled = true;
+        Auth.signInWithMagicLink(email).then(function (result) {
+          if (result.error) {
+            toast(result.error.message || 'Failed to send magic link.', 'error');
+            if (sendBtn) sendBtn.disabled = false;
+            return;
+          }
+          document.getElementById('ob-signin-form').style.display = 'none';
+          document.getElementById('ob-signin-sent').style.display = '';
+          document.getElementById('ob-signin-sent-email').textContent = email;
+        }).catch(function () {
+          toast('Failed to send magic link. Check your connection.', 'error');
+          if (sendBtn) sendBtn.disabled = false;
+        });
+      });
+    }
+
+    // --- Import backup file from welcome screen ---
+    obImportFile.addEventListener('change', async function (e) {
+      var file = e.target.files[0];
+      if (!file) return;
+
+      async function readBackupFile(fileToRead) {
+        if (fileToRead.name.endsWith('.gz')) {
+          if (typeof DecompressionStream === 'undefined') {
+            throw new Error('compressed-not-supported');
+          }
+          var stream = fileToRead.stream().pipeThrough(new DecompressionStream('gzip'));
+          return new Response(stream).text();
+        }
+        return fileToRead.text();
+      }
+
+      try {
+        var content = await readBackupFile(file);
+        var importResult = await Store.importBackupData(content, '');
+
+        if (importResult.requiresPassphrase) {
+          var passphrase = prompt('Enter the backup passphrase to decrypt this file.');
+          if (passphrase === null) {
+            e.target.value = '';
+            return;
+          }
+          importResult = await Store.importBackupData(content, passphrase);
+        }
+
+        if (importResult.success) {
+          document.getElementById('onboarding-modal').style.display = 'none';
+          document.getElementById('app').style.display = '';
+          bootApp();
+          if (importResult.warnings > 0) {
+            toast('Data restored with ' + importResult.warnings + ' skipped row(s).', 'success');
+          } else {
+            toast('Data restored! Welcome back.', 'success');
+          }
+        } else if (importResult.requiresPassphrase && importResult.error === 'invalid-passphrase') {
+          toast('Incorrect passphrase. Please try again.', 'error');
+        } else {
+          toast('Import failed. Invalid backup file.', 'error');
+        }
+      } catch (err) {
+        if (err && err.message === 'compressed-not-supported') {
+          toast('Compressed backup import is not supported in this browser.', 'error');
+        } else {
+          toast('Import failed. Invalid file.', 'error');
+        }
+      }
+
+      e.target.value = '';
     });
   }
 
@@ -691,21 +850,52 @@ const App = (() => {
   function handleAuthStateChange(e) {
     const event = e.detail.event;
     const session = e.detail.session;
+    const onboardingModal = document.getElementById('onboarding-modal');
+    const isOnboarding = onboardingModal && onboardingModal.style.display === 'flex';
 
     if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
       if (event === 'SIGNED_IN') {
         toast('Signed in! Syncing your data...', 'success');
-        // Close auth modal if open
+        // Close auth modal if open (settings context)
         const authModal = document.getElementById('auth-modal');
         if (authModal) closeModal(authModal);
       }
+
+      // Show syncing status on onboarding sign-in screen
+      if (isOnboarding) {
+        var syncingMsg = document.getElementById('ob-signin-syncing');
+        if (syncingMsg) syncingMsg.style.display = '';
+      }
+
       if (typeof Sync !== 'undefined') {
         // Pause sync listener during merge to avoid re-entrant pushes
         Sync.pauseSync();
         Sync.mergeOnSignIn().then(function () {
           Sync.resumeSync();
-          if (event === 'SIGNED_IN') toast('Data synced!', 'success');
-          renderAllPages();
+
+          if (isOnboarding) {
+            // Check if sync brought profile data
+            var profile = Store.getProfile();
+            if (profile.name) {
+              // Data restored from cloud — close onboarding and boot app
+              onboardingModal.style.display = 'none';
+              document.getElementById('app').style.display = '';
+              bootApp();
+              toast('Welcome back! Your data has been restored.', 'success');
+            } else {
+              // Signed in but no cloud data — show new user form
+              toast('Signed in, but no existing data found. Let\'s set up your profile.', '');
+              var screenChooser = document.getElementById('ob-screen-chooser');
+              var screenForm = document.getElementById('ob-screen-form');
+              var screenSignin = document.getElementById('ob-screen-signin');
+              if (screenChooser) screenChooser.style.display = 'none';
+              if (screenSignin) screenSignin.style.display = 'none';
+              if (screenForm) screenForm.style.display = '';
+            }
+          } else {
+            if (event === 'SIGNED_IN') toast('Data synced!', 'success');
+            renderAllPages();
+          }
         }).catch(function (err) {
           Sync.resumeSync();
           console.error('[App] Sync failed:', err);
@@ -718,7 +908,9 @@ const App = (() => {
       toast('Signed out. Your data is still stored locally.', 'success');
     }
 
-    updateAccountUI();
+    if (!isOnboarding) {
+      updateAccountUI();
+    }
   }
 
   function updateAccountUI() {
