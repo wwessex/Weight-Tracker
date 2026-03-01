@@ -44,6 +44,8 @@ const Store = (() => {
       startWeight: '',
       startDate: formatLocalDate(new Date()),
       medication: 'semaglutide',
+      dosage: '',
+      frequency: 'weekly',
     },
     settings: {
       weightUnit: 'kg',
@@ -1434,6 +1436,8 @@ const Store = (() => {
         mergedProfile.startWeight = startWeight === null ? '' : startWeight;
         mergedProfile.startDate = startDate || defaults.profile.startDate;
         mergedProfile.medication = toStringOrEmpty(mergedProfile.medication || defaults.profile.medication);
+        mergedProfile.dosage = toStringOrEmpty(mergedProfile.dosage);
+        mergedProfile.frequency = toStringOrEmpty(mergedProfile.frequency || defaults.profile.frequency);
 
         saveProfile(mergedProfile);
       }

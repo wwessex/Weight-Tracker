@@ -3,9 +3,35 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Jab It: Weight Loss Tracker</title>
-  <meta name="description" content="Track your weight loss journey and medication doses">
+  <title>Jab It — Free Weight Loss &amp; GLP-1 Medication Tracker</title>
+  <meta name="description" content="Free, private weight loss tracker for GLP-1 medications like Ozempic, Wegovy, Mounjaro &amp; Zepbound. Log doses, track weight, body measurements, fasting &amp; exercise. All data stays on your device.">
+  <meta name="keywords" content="weight loss tracker, GLP-1 tracker, Ozempic tracker, Wegovy tracker, Mounjaro tracker, Zepbound tracker, semaglutide tracker, tirzepatide tracker, medication dose tracker, weight loss app, BMI tracker, body measurement tracker, intermittent fasting tracker">
+  <meta name="author" content="Jab It">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://wwessex.github.io/Weight-Tracker/">
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://wwessex.github.io/Weight-Tracker/">
+  <meta property="og:title" content="Jab It — Free Weight Loss &amp; GLP-1 Medication Tracker">
+  <meta property="og:description" content="Free, private weight loss tracker for GLP-1 medications like Ozempic, Wegovy, Mounjaro &amp; Zepbound. Log doses, track weight, body measurements, fasting &amp; exercise. All data stays on your device.">
+  <meta property="og:image" content="https://wwessex.github.io/Weight-Tracker/icons/icon-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="Jab It weight loss tracker app icon">
+  <meta property="og:site_name" content="Jab It">
+  <meta property="og:locale" content="en_US">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Jab It — Free Weight Loss &amp; GLP-1 Medication Tracker">
+  <meta name="twitter:description" content="Free, private weight loss tracker for GLP-1 medications. Log doses, track weight, measurements &amp; exercise. All data stays on your device.">
+  <meta name="twitter:image" content="https://wwessex.github.io/Weight-Tracker/icons/icon-512.png">
+  <meta name="twitter:image:alt" content="Jab It weight loss tracker app icon">
+
   <meta name="theme-color" content="#6366f1">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="application-name" content="Jab It">
   <script>
     // Apply saved theme immediately to prevent flash of wrong theme
     try {
@@ -30,8 +56,54 @@
   <link rel="stylesheet" href="css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
+  <!-- Structured Data (JSON-LD) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Jab It",
+    "alternateName": "Jab It: Weight Loss Tracker",
+    "url": "https://wwessex.github.io/Weight-Tracker/",
+    "description": "Free, private weight loss tracker for GLP-1 medications like Ozempic, Wegovy, Mounjaro and Zepbound. Log doses, track weight, body measurements, fasting and exercise. All data stays on your device.",
+    "applicationCategory": "HealthApplication",
+    "operatingSystem": "Any",
+    "browserRequirements": "Requires a modern web browser with JavaScript and localStorage support",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "featureList": [
+      "Weight tracking with charts and trends",
+      "GLP-1 medication dose logging (Ozempic, Wegovy, Mounjaro, Zepbound, Saxenda)",
+      "BMI calculation",
+      "Body measurement tracking",
+      "Intermittent fasting timer",
+      "Exercise logging",
+      "Mood and energy journaling",
+      "Progress photos",
+      "Doctor report generation",
+      "Data export (JSON and CSV)",
+      "Encrypted backup support",
+      "Dark mode and calm theme",
+      "Offline-capable PWA"
+    ],
+    "screenshot": "https://wwessex.github.io/Weight-Tracker/icons/icon-512.png",
+    "softwareVersion": "1.0",
+    "inLanguage": "en"
+  }
+  </script>
 </head>
 <body>
+  <noscript>
+    <div style="padding:2rem;text-align:center;font-family:sans-serif;">
+      <h1>Jab It: Weight Loss &amp; GLP-1 Medication Tracker</h1>
+      <p>Jab It requires JavaScript to run. Please enable JavaScript in your browser settings to use this app.</p>
+      <p>Jab It is a free, private weight loss tracker for GLP-1 medications like Ozempic, Wegovy, Mounjaro and Zepbound. Track your doses, weight, body measurements, fasting and exercise — all data stays securely on your device.</p>
+    </div>
+  </noscript>
+
   <!-- Onboarding Modal -->
   <div id="onboarding-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Welcome setup">
     <div class="modal">
@@ -146,11 +218,12 @@
         <span class="app-logo-badge">Tracker</span>
       </div>
     </header>
+    <h1 class="sr-only">Jab It: Weight Loss &amp; GLP-1 Medication Tracker</h1>
 
-    <!-- ===== Summary Page ===== -->
+    <main>
     <section class="page active" id="page-summary">
       <div class="page-title">
-        <h1>Summary</h1>
+        <h2>Summary</h2>
       </div>
 
       <!-- In-app reminder banners (fallback when browser notifications unavailable) -->
@@ -301,7 +374,7 @@
     <!-- ===== Doses Page ===== -->
     <section class="page" id="page-doses">
       <div class="page-title">
-        <h1>Doses</h1>
+        <h2>Doses</h2>
         <button class="btn btn-add" id="btn-add-dose" aria-label="Add dose">+ Add</button>
       </div>
 
@@ -397,7 +470,7 @@
     <!-- ===== Progress Page ===== -->
     <section class="page" id="page-progress">
       <div class="page-title">
-        <h1>Progress</h1>
+        <h2>Progress</h2>
         <button class="btn btn-add" id="btn-add-weight" aria-label="Log weight">+ Log</button>
       </div>
 
@@ -518,7 +591,7 @@
     <!-- ===== Settings Page ===== -->
     <section class="page" id="page-settings">
       <div class="page-title">
-        <h1>Settings</h1>
+        <h2>Settings</h2>
       </div>
 
       <!-- Profile Section -->
@@ -669,7 +742,7 @@
     <!-- ===== Journal Page ===== -->
     <section class="page" id="page-journal">
       <div class="page-title">
-        <h1>Journal</h1>
+        <h2>Journal</h2>
       </div>
 
       <!-- Fasting Timer -->
@@ -734,6 +807,7 @@
       <div id="exercise-list"></div>
       <p class="empty-text" id="exercise-empty">Log your workouts and activities!</p>
     </section>
+    </main>
 
     <!-- ===== Measurement Entry Modal ===== -->
     <div id="measurement-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Log measurement">

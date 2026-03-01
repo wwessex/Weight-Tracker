@@ -1,7 +1,7 @@
 {
-  "name": "Jab It: Weight Loss Tracker",
+  "name": "Jab It: Weight Loss & GLP-1 Medication Tracker",
   "short_name": "Jab It",
-  "description": "Track your weight loss journey and GLP-1 medication doses",
+  "description": "Free, private weight loss tracker for GLP-1 medications like Ozempic, Wegovy, Mounjaro and Zepbound. Log doses, track weight, body measurements, fasting and exercise. All data stays on your device.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
