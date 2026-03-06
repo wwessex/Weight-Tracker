@@ -2489,13 +2489,18 @@ const App = (() => {
     }
     empty.style.display = 'none';
 
-    gallery.innerHTML = [...photos].reverse().map(p => `
-      <div class="photo-thumb" data-action="view-photos">
-        <img src="${escapeHtml(p.dataUrl)}" alt="Progress photo ${formatDateShort(p.date)}" loading="lazy">
-        <span class="photo-thumb-date">${formatDateShort(p.date)}</span>
-        <button class="photo-thumb-delete" data-action="remove-photo" data-id="${escapeHtml(p.id)}" aria-label="Delete photo">&times;</button>
-      </div>
-    `).join('');
+    gallery.innerHTML = [...photos].reverse().map(function(p) {
+      var imgSrc = p.thumbDataUrl || p.dataUrl;
+      var syncIcon = p.syncedAt
+        ? '<span class="photo-sync-badge synced" title="Synced to cloud"></span>'
+        : '<span class="photo-sync-badge pending" title="Not yet synced"></span>';
+      return '<div class="photo-thumb" data-action="view-photos">'
+        + '<img src="' + escapeHtml(imgSrc) + '" alt="Progress photo ' + formatDateShort(p.date) + '" loading="lazy">'
+        + '<span class="photo-thumb-date">' + formatDateShort(p.date) + '</span>'
+        + syncIcon
+        + '<button class="photo-thumb-delete" data-action="remove-photo" data-id="' + escapeHtml(p.id) + '" aria-label="Delete photo">&times;</button>'
+        + '</div>';
+    }).join('');
   }
 
   async function viewPhotos() {

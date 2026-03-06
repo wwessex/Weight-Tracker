@@ -1028,6 +1028,22 @@ a { color: var(--primary); text-decoration: none; }
   display: flex;
 }
 
+.photo-sync-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255,255,255,0.8);
+}
+.photo-sync-badge.synced {
+  background: #22c55e;
+}
+.photo-sync-badge.pending {
+  background: #f59e0b;
+}
+
 /* Photo Compare */
 .photo-compare {
   display: grid;

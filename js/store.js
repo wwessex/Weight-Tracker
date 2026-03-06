@@ -24,7 +24,7 @@ const Store = (() => {
 
   const PHOTO_DB = {
     NAME: 'shotsy_photo_db',
-    VERSION: 1,
+    VERSION: 2,
     STORE: 'photos',
   };
 
@@ -220,11 +220,12 @@ const Store = (() => {
         return;
       }
       const request = indexedDB.open(PHOTO_DB.NAME, PHOTO_DB.VERSION);
-      request.onupgradeneeded = () => {
+      request.onupgradeneeded = (event) => {
         const db = request.result;
         if (!db.objectStoreNames.contains(PHOTO_DB.STORE)) {
           db.createObjectStore(PHOTO_DB.STORE, { keyPath: 'id' });
         }
+        // v2: existing records get thumbBlob/contentHash/syncedAt on first access
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error || new Error('Unable to open photo storage'));
@@ -255,6 +256,44 @@ const Store = (() => {
       reader.onerror = () => reject(reader.error || new Error('Unable to read image blob'));
       reader.readAsDataURL(blob);
     });
+  }
+
+  function compressImage(blob, maxDim, quality) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(blob);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        let w = img.width, h = img.height;
+        if (w > maxDim || h > maxDim) {
+          const ratio = Math.min(maxDim / w, maxDim / h);
+          w = Math.round(w * ratio);
+          h = Math.round(h * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(
+          (result) => result ? resolve(result) : reject(new Error('Compression failed')),
+          'image/jpeg',
+          quality
+        );
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('Failed to load image for compression'));
+      };
+      img.src = url;
+    });
+  }
+
+  async function computeContentHash(blob) {
+    const buffer = await blob.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
   function withPhotoStore(mode, handler) {
@@ -517,6 +556,9 @@ const Store = (() => {
       id: p.id,
       date: p.date,
       note: p.note || '',
+      contentHash: p.contentHash || null,
+      syncedAt: p.syncedAt || null,
+      thumbDataUrl: p.thumbBlob ? await blobToDataUrl(p.thumbBlob) : '',
       dataUrl: p.blob ? await blobToDataUrl(p.blob) : '',
     })));
 
@@ -545,13 +587,31 @@ const Store = (() => {
 
   async function addPhoto(entry) {
     await ensurePhotoStorageReady();
+    var rawBlob = entry.blob || (entry.dataUrl ? dataUrlToBlob(entry.dataUrl) : null);
+    if (!rawBlob) throw new Error('Missing photo image data');
+
+    // Always compress: full image (1200px, 80% quality) + thumbnail (200px, 60%)
+    var fullBlob, thumbBlob, contentHash;
+    try {
+      fullBlob = await compressImage(rawBlob, 1200, 0.8);
+      thumbBlob = await compressImage(rawBlob, 200, 0.6);
+      contentHash = await computeContentHash(fullBlob);
+    } catch (compressErr) {
+      // Fallback: use raw blob if compression fails (e.g. SVG)
+      fullBlob = rawBlob;
+      thumbBlob = rawBlob;
+      contentHash = null;
+    }
+
     const photo = {
       id: entry.id || generateId(),
       date: entry.date,
       note: entry.note || '',
-      blob: entry.blob || (entry.dataUrl ? dataUrlToBlob(entry.dataUrl) : null),
+      blob: fullBlob,
+      thumbBlob: thumbBlob,
+      contentHash: contentHash,
+      syncedAt: null,
     };
-    if (!photo.blob) throw new Error('Missing photo image data');
 
     try {
       await withPhotoStore('readwrite', (store, tx, resolve, reject, finish) => {
@@ -567,10 +627,15 @@ const Store = (() => {
       throw error;
     }
 
+    // Dispatch mutation event for sync
+    window.dispatchEvent(new CustomEvent('store-mutation', { detail: { key: 'shotsy_photos', photoId: photo.id } }));
+
     return {
       id: photo.id,
       date: photo.date,
       note: photo.note,
+      contentHash: photo.contentHash,
+      syncedAt: null,
       dataUrl: await blobToDataUrl(photo.blob),
     };
   }
@@ -581,7 +646,36 @@ const Store = (() => {
       const req = store.delete(id);
       req.onerror = () => finish(reject, req.error || new Error('Unable to delete photo'));
     });
+    window.dispatchEvent(new CustomEvent('store-mutation', { detail: { key: 'shotsy_photos', photoId: id, deleted: true } }));
     return getPhotos();
+  }
+
+  async function getPhotoRecord(id) {
+    await ensurePhotoStorageReady();
+    return withPhotoStore('readonly', (store, tx, resolve, reject, finish) => {
+      const req = store.get(id);
+      req.onsuccess = () => finish(resolve, req.result || null);
+      req.onerror = () => finish(reject, req.error || new Error('Unable to read photo'));
+    });
+  }
+
+  async function markPhotoSynced(id) {
+    await ensurePhotoStorageReady();
+    const record = await getPhotoRecord(id);
+    if (!record) return;
+    record.syncedAt = new Date().toISOString();
+    await withPhotoStore('readwrite', (store, tx, resolve, reject, finish) => {
+      const req = store.put(record);
+      req.onerror = () => finish(reject, req.error || new Error('Unable to update photo'));
+    });
+  }
+
+  async function savePhotoFromRemote(record) {
+    await ensurePhotoStorageReady();
+    await withPhotoStore('readwrite', (store, tx, resolve, reject, finish) => {
+      const req = store.put(record);
+      req.onerror = () => finish(reject, req.error || new Error('Unable to save remote photo'));
+    });
   }
 
   // Goals
@@ -1716,6 +1810,8 @@ const Store = (() => {
     getVictories, saveVictories, addVictory, deleteVictory,
     ensurePhotoStorageReady,
     getPhotos, savePhotos, addPhoto, deletePhoto,
+    getPhotoRecord, markPhotoSynced, savePhotoFromRemote,
+    compressImage, computeContentHash, dataUrlToBlob, blobToDataUrl,
     getMeasurements, saveMeasurements, addMeasurement, updateMeasurement, deleteMeasurement, getMeasurementStats,
     getJournal, saveJournal, addJournalEntry, updateJournalEntry, deleteJournalEntry, getMoodTrend,
     getFasts, saveFasts, addFast, deleteFast, getActiveFast, setActiveFast, clearActiveFast, getFastingStats,
