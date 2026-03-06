@@ -208,6 +208,201 @@ const Sync = (() => {
       });
   }
 
+  // --- Photo sync (Supabase Storage + photos metadata table) ---
+
+  var PHOTO_BUCKET = 'photos';
+
+  function photoPath(userId, photoId) {
+    return userId + '/' + photoId + '.jpg';
+  }
+
+  function thumbPath(userId, photoId) {
+    return userId + '/' + photoId + '_thumb.jpg';
+  }
+
+  function pushPhoto(photoId) {
+    var client = getClient();
+    var userId = getUserId();
+    if (!client || !userId) return Promise.resolve();
+
+    return Store.getPhotoRecord(photoId).then(function (record) {
+      if (!record || !record.blob) return;
+
+      var fullPath = photoPath(userId, photoId);
+      var tPath = thumbPath(userId, photoId);
+
+      // Upload full image and thumbnail in parallel
+      var uploads = [
+        client.storage.from(PHOTO_BUCKET).upload(fullPath, record.blob, {
+          contentType: 'image/jpeg', upsert: true
+        }),
+      ];
+      if (record.thumbBlob) {
+        uploads.push(
+          client.storage.from(PHOTO_BUCKET).upload(tPath, record.thumbBlob, {
+            contentType: 'image/jpeg', upsert: true
+          })
+        );
+      }
+
+      return Promise.all(uploads).then(function (results) {
+        var hasError = results.some(function (r) { return r.error; });
+        if (hasError) {
+          console.error('[Sync] Photo upload error:', results.map(function (r) { return r.error; }));
+          return;
+        }
+
+        // Upsert metadata row
+        var row = {
+          user_id: userId,
+          id: photoId,
+          date: record.date,
+          note: record.note || '',
+          storage_path: fullPath,
+          thumb_path: tPath,
+          content_hash: record.contentHash || null,
+          updated_at: new Date().toISOString(),
+        };
+
+        return client.from('photos').upsert(row, { onConflict: 'user_id,id' }).then(function (result) {
+          if (result.error) {
+            console.error('[Sync] Photo metadata push error:', result.error);
+            return;
+          }
+          return Store.markPhotoSynced(photoId);
+        });
+      });
+    });
+  }
+
+  function deletePhotoRemote(photoId) {
+    var client = getClient();
+    var userId = getUserId();
+    if (!client || !userId) return Promise.resolve();
+
+    var fullPath = photoPath(userId, photoId);
+    var tPath = thumbPath(userId, photoId);
+
+    return Promise.all([
+      client.storage.from(PHOTO_BUCKET).remove([fullPath, tPath]),
+      client.from('photos').update({ deleted_at: new Date().toISOString() })
+        .eq('user_id', userId).eq('id', photoId),
+    ]).then(function (results) {
+      if (results[0].error) console.error('[Sync] Photo storage delete error:', results[0].error);
+      if (results[1].error) console.error('[Sync] Photo metadata delete error:', results[1].error);
+    });
+  }
+
+  function pullPhotoMetadata() {
+    var client = getClient();
+    var userId = getUserId();
+    if (!client || !userId) return Promise.resolve({ active: [], tombstoneIds: [] });
+
+    return client.from('photos').select('*').eq('user_id', userId).then(function (result) {
+      if (result.error) {
+        console.error('[Sync] Pull photo metadata error:', result.error);
+        return { active: [], tombstoneIds: [] };
+      }
+      var active = [];
+      var tombstoneIds = [];
+      (result.data || []).forEach(function (row) {
+        if (row.deleted_at) {
+          tombstoneIds.push(row.id);
+        } else {
+          active.push(keysToCamel(row));
+        }
+      });
+      return { active: active, tombstoneIds: tombstoneIds };
+    });
+  }
+
+  function downloadPhotoBlob(storagePath) {
+    var client = getClient();
+    if (!client) return Promise.resolve(null);
+    return client.storage.from(PHOTO_BUCKET).download(storagePath).then(function (result) {
+      if (result.error) {
+        console.error('[Sync] Photo download error:', result.error);
+        return null;
+      }
+      return result.data;
+    });
+  }
+
+  function syncPhotos() {
+    if (!Auth.isLoggedIn()) return Promise.resolve();
+
+    return Promise.all([
+      Store.getPhotos(),
+      pullPhotoMetadata(),
+    ]).then(function (results) {
+      var localPhotos = results[0];
+      var remote = results[1];
+      var remoteActive = remote.active;
+      var tombstoneIds = remote.tombstoneIds;
+      var tombstoneSet = {};
+      tombstoneIds.forEach(function (id) { tombstoneSet[id] = true; });
+
+      var localMap = {};
+      localPhotos.forEach(function (p) { localMap[p.id] = p; });
+
+      var remoteMap = {};
+      remoteActive.forEach(function (p) { remoteMap[p.id] = p; });
+
+      var promises = [];
+
+      // Push local photos that aren't synced yet
+      localPhotos.forEach(function (photo) {
+        if (tombstoneSet[photo.id]) return; // remotely deleted
+        if (!photo.syncedAt) {
+          promises.push(pushPhoto(photo.id));
+        }
+      });
+
+      // Pull remote photos not in local
+      remoteActive.forEach(function (remoteMeta) {
+        if (localMap[remoteMeta.id]) return; // already local
+        // Download full + thumb and save locally
+        promises.push(
+          Promise.all([
+            downloadPhotoBlob(remoteMeta.storagePath),
+            remoteMeta.thumbPath ? downloadPhotoBlob(remoteMeta.thumbPath) : Promise.resolve(null),
+          ]).then(function (blobs) {
+            var fullBlob = blobs[0];
+            var tBlob = blobs[1];
+            if (!fullBlob) return;
+            return Store.savePhotoFromRemote({
+              id: remoteMeta.id,
+              date: remoteMeta.date,
+              note: remoteMeta.note || '',
+              blob: fullBlob,
+              thumbBlob: tBlob || fullBlob,
+              contentHash: remoteMeta.contentHash || null,
+              syncedAt: new Date().toISOString(),
+            });
+          })
+        );
+      });
+
+      // Delete local photos that were remotely tombstoned
+      tombstoneIds.forEach(function (id) {
+        if (localMap[id]) {
+          promises.push(Store.deletePhoto(id));
+        }
+      });
+
+      return Promise.all(promises);
+    });
+  }
+
+  function pushAllPhotos() {
+    if (!Auth.isLoggedIn()) return Promise.resolve();
+    return Store.getPhotos().then(function (photos) {
+      var unsynced = photos.filter(function (p) { return !p.syncedAt; });
+      if (unsynced.length === 0) return;
+      return Promise.all(unsynced.map(function (p) { return pushPhoto(p.id); }));
+    });
+  }
+
   // --- Full sync operations ---
 
   function pushAll() {
@@ -226,6 +421,9 @@ const Sync = (() => {
         promises.push(pushSingleton(table, data));
       }
     });
+
+    // Also push unsynced photos
+    promises.push(pushAllPhotos());
 
     return Promise.all(promises).then(function () {
       localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString());
@@ -252,6 +450,9 @@ const Sync = (() => {
     });
 
     return Promise.all(collectionPromises.concat(singletonPromises)).then(function () {
+      // Sync photos after other data
+      return syncPhotos();
+    }).then(function () {
       localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString());
     });
   }
@@ -296,6 +497,26 @@ const Sync = (() => {
   function handleStoreMutation(e) {
     if (_paused || !Auth.isLoggedIn()) return;
     var key = e.detail.key;
+
+    // Handle photo mutations separately
+    if (key === 'shotsy_photos') {
+      var photoId = e.detail.photoId;
+      if (!photoId) return;
+      clearTimeout(syncTimers['photo_' + photoId]);
+      syncTimers['photo_' + photoId] = setTimeout(function () {
+        if (e.detail.deleted) {
+          deletePhotoRemote(photoId).catch(function (err) {
+            console.error('[Sync] Photo delete sync failed:', err);
+          });
+        } else {
+          pushPhoto(photoId).catch(function (err) {
+            console.error('[Sync] Photo push failed:', err);
+          });
+        }
+      }, 2000);
+      return;
+    }
+
     var table = KEY_TABLE_MAP[key];
     if (!table) return;
 
@@ -360,5 +581,9 @@ const Sync = (() => {
     getLastSyncTime: getLastSyncTime,
     pauseSync: pauseSync,
     resumeSync: resumeSync,
+    syncPhotos: syncPhotos,
+    pushPhoto: pushPhoto,
+    deletePhotoRemote: deletePhotoRemote,
+    downloadPhotoBlob: downloadPhotoBlob,
   };
 })();
