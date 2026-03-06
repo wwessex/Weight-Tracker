@@ -70,13 +70,23 @@ const Auth = (() => {
     return !!currentSession;
   }
 
+  function getRedirectURL() {
+    // Build a clean redirect URL: origin + path without index.html, with trailing slash
+    var path = window.location.pathname;
+    // Strip trailing index.html to get the directory path
+    path = path.replace(/\/index\.html$/i, '/');
+    // Ensure trailing slash
+    if (path.charAt(path.length - 1) !== '/') path += '/';
+    return window.location.origin + path;
+  }
+
   function signInWithMagicLink(email) {
     if (!client) return Promise.reject(new Error('Sign-in is not available. Please check your connection and try again.'));
 
     // Race the OTP request against a timeout to prevent iOS Safari fetch hanging
     var otpPromise = client.auth.signInWithOtp({
       email: email,
-      options: { emailRedirectTo: window.location.origin + window.location.pathname },
+      options: { emailRedirectTo: getRedirectURL() },
     });
 
     var timeoutPromise = new Promise(function (_, reject) {
