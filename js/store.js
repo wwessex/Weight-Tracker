@@ -1,4 +1,11 @@
 // Jab It Data Store - localStorage persistence layer
+/**
+ * @typedef {{ name: string, age: string, height: string, heightUnit: string, startWeight: string, startDate: string, medication: string, dosage: string, frequency: string }} Profile
+ * @typedef {{ id: string, date: string, weight: number, note: string }} WeightEntry
+ * @typedef {{ id: string, date: string, time: string, medication: string, dose: number, doseUnit: string, site: string, sideEffects: string[], notes: string }} JabEntry
+ * @typedef {{ targetWeight: number, weeklyTarget: number, targetDate: string }} Goals
+ * @typedef {{ weightUnit: string, theme: string, weeklyReminder: boolean, jabReminder: boolean, reminderDay: string }} Settings
+ */
 const Store = (() => {
   const KEYS = {
     PROFILE: 'shotsy_profile',
@@ -153,10 +160,22 @@ const Store = (() => {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   }
 
+  /**
+   * Validates a date string is in YYYY-MM-DD format and represents a real date.
+   * @param {string} dateStr
+   * @returns {boolean}
+   */
+  function isValidDateString(dateStr) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+    var d = new Date(dateStr + 'T00:00:00');
+    return !isNaN(d.getTime());
+  }
+
   // Generic CRUD factory for localStorage-backed collections
   function createCollection(key, options) {
     const sortFn = (options && options.sortFn) || sortByLocalDate;
     const shouldInvalidate = !!(options && options.invalidateCache);
+    const validateFn = (options && options.validate) || null;
 
     function getAll() { return get(key) || []; }
     function saveAll(items) {
@@ -164,6 +183,10 @@ const Store = (() => {
       return set(key, items);
     }
     function add(entry) {
+      if (validateFn) {
+        var error = validateFn(entry);
+        if (error) return { success: false, error: error };
+      }
       const items = getAll();
       entry.id = generateId();
       items.push(entry);
@@ -304,14 +327,32 @@ const Store = (() => {
   }
 
   // Entity collections via generic CRUD factory
-  const weightCol = createCollection(KEYS.WEIGHTS, { invalidateCache: true });
+  const weightCol = createCollection(KEYS.WEIGHTS, {
+    invalidateCache: true,
+    validate: function(entry) {
+      var w = parseFloat(entry.weight);
+      if (isNaN(w) || w <= 0 || w > 1500) return 'Weight must be between 0 and 1500';
+      entry.weight = w; // ensure stored as number
+      if (entry.date && !isValidDateString(entry.date)) return 'Invalid date format';
+      return null;
+    }
+  });
   const getWeights = weightCol.getAll;
   const saveWeights = weightCol.saveAll;
   const addWeight = weightCol.add;
   const updateWeight = weightCol.update;
   const deleteWeight = weightCol.remove;
 
-  const jabCol = createCollection(KEYS.JABS, { invalidateCache: true });
+  const jabCol = createCollection(KEYS.JABS, {
+    invalidateCache: true,
+    validate: function(entry) {
+      var d = parseFloat(entry.dose);
+      if (isNaN(d) || d < 0 || d > 500) return 'Dose must be between 0 and 500';
+      entry.dose = d; // ensure stored as number
+      if (entry.date && !isValidDateString(entry.date)) return 'Invalid date format';
+      return null;
+    }
+  });
   const getJabs = jabCol.getAll;
   const saveJabs = jabCol.saveAll;
   const addJab = jabCol.add;

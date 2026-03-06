@@ -16,6 +16,17 @@ const App = (() => {
   const REMINDER_CHECK_INTERVAL_MS = 30 * 60 * 1000;
   const REMINDER_CATCH_UP_INTERVAL_MS = 2 * 60 * 60 * 1000;
 
+  // ===== UTILITIES =====
+  function escapeHtml(str) {
+    if (str == null) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   // ===== INIT =====
   function showOnboardingOrApp() {
     const profile = Store.getProfile();
@@ -159,6 +170,32 @@ const App = (() => {
         e.preventDefault();
         try { navigateTo(navTab.dataset.page); } catch (err) {
           window.location.hash = '#' + navTab.dataset.page;
+        }
+      }
+
+      // Delegated data-action handlers (replaces inline onclick)
+      var actionEl = target.closest('[data-action]');
+      if (actionEl) {
+        var action = actionEl.dataset.action;
+        var id = actionEl.dataset.id;
+        switch (action) {
+          case 'edit-weight': App.editWeight(id); break;
+          case 'remove-weight': App.removeWeight(id); break;
+          case 'edit-dose': App.editDose(id); break;
+          case 'remove-dose': App.removeDose(id); break;
+          case 'remove-photo':
+            e.stopPropagation();
+            App.removePhoto(id);
+            break;
+          case 'view-photos': App.viewPhotos(); break;
+          case 'remove-victory': App.removeVictory(id); break;
+          case 'edit-measurement': App.editMeasurement(id); break;
+          case 'remove-measurement': App.removeMeasurement(id); break;
+          case 'edit-journal': App.editJournalEntry(id); break;
+          case 'remove-journal': App.removeJournalEntry(id); break;
+          case 'edit-exercise': App.editExercise(id); break;
+          case 'remove-exercise': App.removeExercise(id); break;
+          case 'remove-fast': App.removeFast(id); break;
         }
       }
     });
@@ -557,6 +594,7 @@ const App = (() => {
       theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
     document.documentElement.setAttribute('data-theme', theme);
+    invalidateChartCache();
     // Update meta theme-color for Safari status bar
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) {
@@ -742,6 +780,19 @@ const App = (() => {
       textMuted: isDark ? '#64748b' : '#94a3b8',
       grid: isDark ? 'rgba(148,163,184,0.1)' : 'rgba(148,163,184,0.15)',
     };
+  }
+
+  var _chartDataHashes = {};
+
+  function chartDataHash(key, data) {
+    var hash = data.length + ':' + (data.length > 0 ? data[data.length - 1].date || data[data.length - 1].id || '' : '');
+    if (_chartDataHashes[key] === hash) return true; // unchanged
+    _chartDataHashes[key] = hash;
+    return false; // changed
+  }
+
+  function invalidateChartCache() {
+    _chartDataHashes = {};
   }
 
   function destroyChart(chart) {
@@ -1754,7 +1805,11 @@ const App = (() => {
         Store.updateJab(id, entry);
         toast('Dose updated', 'success');
       } else {
-        Store.addJab(entry);
+        var result = Store.addJab(entry);
+        if (result && result.success === false) {
+          toast(result.error, 'error');
+          return;
+        }
         toast('Dose logged!', 'success');
       }
       closeModal(doseModal);
@@ -1837,13 +1892,13 @@ const App = (() => {
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 2l1.5 1.5L9 5"/><path d="M14 2l1.5 1.5L14 5"/><rect x="4" y="7" width="16" height="14" rx="2"/><path d="M12 11v6"/><path d="M9 14h6"/></svg>
         </div>
         <div class="dose-item-info">
-          <div class="dose-item-title">${medicationLabel(j.medication)}</div>
-          <div class="dose-item-sub">${formatDateShort(j.date)}${j.site ? ' &middot; ' + siteLabel(j.site) : ''}${j.notes && j.notes.startsWith('MISSED') ? ' &middot; <strong style="color:var(--warning)">Missed</strong>' : ''}</div>
+          <div class="dose-item-title">${escapeHtml(medicationLabel(j.medication))}</div>
+          <div class="dose-item-sub">${formatDateShort(j.date)}${j.site ? ' &middot; ' + escapeHtml(siteLabel(j.site)) : ''}${j.notes && j.notes.startsWith('MISSED') ? ' &middot; <strong style="color:var(--warning)">Missed</strong>' : ''}</div>
         </div>
-        <div class="dose-item-value">${j.dose} ${j.doseUnit}</div>
+        <div class="dose-item-value">${escapeHtml(j.dose)} ${escapeHtml(j.doseUnit)}</div>
         <div class="dose-item-actions">
-          <button class="btn btn-ghost btn-sm" onclick="App.editDose('${j.id}')" aria-label="Edit dose">Edit</button>
-          <button class="btn btn-ghost btn-sm" onclick="App.removeDose('${j.id}')" aria-label="Delete dose">Del</button>
+          <button class="btn btn-ghost btn-sm" data-action="edit-dose" data-id="${escapeHtml(j.id)}" aria-label="Edit dose">Edit</button>
+          <button class="btn btn-ghost btn-sm" data-action="remove-dose" data-id="${escapeHtml(j.id)}" aria-label="Delete dose">Del</button>
         </div>
       </div>
     `).join('');
@@ -1857,6 +1912,7 @@ const App = (() => {
   }
 
   function renderDoseChart(jabs) {
+    if (doseChart && chartDataHash('doses', jabs)) return;
     const colors = getChartColors();
     doseChart = destroyChart(doseChart);
     const ctx = document.getElementById('chart-doses').getContext('2d');
@@ -1936,7 +1992,7 @@ const App = (() => {
     });
 
     const rec = document.getElementById('site-recommendation');
-    rec.innerHTML = 'Last: <strong>' + siteLabel(data.lastSite) + '</strong> &middot; Recommended next: <strong>' + siteLabel(data.recommended) + '</strong>';
+    rec.innerHTML = 'Last: <strong>' + escapeHtml(siteLabel(data.lastSite)) + '</strong> &middot; Recommended next: <strong>' + escapeHtml(siteLabel(data.recommended)) + '</strong>';
   }
 
   function renderSideEffectTrends() {
@@ -1959,7 +2015,7 @@ const App = (() => {
       const label = effect.replace('-', ' ');
       return `
         <div class="side-effect-bar-row">
-          <span class="side-effect-bar-label">${label}</span>
+          <span class="side-effect-bar-label">${escapeHtml(label)}</span>
           <div class="side-effect-bar-track">
             <div class="side-effect-bar-fill" style="width:${pct}%"></div>
           </div>
@@ -1981,13 +2037,13 @@ const App = (() => {
     section.style.display = '';
 
     list.innerHTML = escalations.reverse().map((e, i) => `
-      <div class="escalation-item ${e.direction}" style="animation-delay:${i * 0.05}s">
+      <div class="escalation-item ${escapeHtml(e.direction)}" style="animation-delay:${i * 0.05}s">
         <div class="escalation-date">${formatDate(e.date)}</div>
         <div class="escalation-detail">
-          ${e.fromDose} ${e.unit}
+          ${escapeHtml(e.fromDose)} ${escapeHtml(e.unit)}
           <span class="escalation-arrow">${e.direction === 'up' ? '&#x2191;' : '&#x2193;'}</span>
-          ${e.toDose} ${e.unit}
-          (${medicationLabel(e.medication)})
+          ${escapeHtml(e.toDose)} ${escapeHtml(e.unit)}
+          (${escapeHtml(medicationLabel(e.medication))})
         </div>
       </div>
     `).join('');
@@ -2012,7 +2068,7 @@ const App = (() => {
       return `
         <div class="correlation-item">
           <div class="correlation-dose-change">
-            ${d.fromDose} ${d.unit} &rarr; ${d.toDose} ${d.unit}
+            ${escapeHtml(d.fromDose)} ${escapeHtml(d.unit)} &rarr; ${escapeHtml(d.toDose)} ${escapeHtml(d.unit)}
             <span class="correlation-date">(${formatDateShort(d.date)})</span>
           </div>
           <div class="correlation-rates">
@@ -2048,7 +2104,11 @@ const App = (() => {
         Store.updateWeight(id, entry);
         toast('Weight updated', 'success');
       } else {
-        Store.addWeight(entry);
+        var result = Store.addWeight(entry);
+        if (result && result.success === false) {
+          toast(result.error, 'error');
+          return;
+        }
         toast('Weight logged!', 'success');
       }
       closeModal(weightModal);
@@ -2242,6 +2302,7 @@ const App = (() => {
   }
 
   function renderWeightFullChart(weights) {
+    if (weightFullChart && chartDataHash('weightFull', weights)) return;
     const colors = getChartColors();
     const goals = Store.getGoals();
 
@@ -2403,12 +2464,12 @@ const App = (() => {
       return `
         <div class="weight-item">
           <div class="weight-item-info">
-            <div class="weight-item-date">${formatDateShort(w.date)} ${w.note ? '&middot; ' + w.note : ''}</div>
+            <div class="weight-item-date">${formatDateShort(w.date)} ${w.note ? '&middot; ' + escapeHtml(w.note) : ''}</div>
             <div class="weight-item-value">${parseFloat(w.weight).toFixed(1)} ${unit} ${changeHtml}</div>
           </div>
           <div style="display:flex;gap:4px;">
-            <button class="btn btn-ghost btn-sm" onclick="App.editWeight('${w.id}')" aria-label="Edit weight entry">Edit</button>
-            <button class="btn btn-ghost btn-sm" onclick="App.removeWeight('${w.id}')" aria-label="Delete weight entry">Del</button>
+            <button class="btn btn-ghost btn-sm" data-action="edit-weight" data-id="${escapeHtml(w.id)}" aria-label="Edit weight entry">Edit</button>
+            <button class="btn btn-ghost btn-sm" data-action="remove-weight" data-id="${escapeHtml(w.id)}" aria-label="Delete weight entry">Del</button>
           </div>
         </div>
       `;
@@ -2429,10 +2490,10 @@ const App = (() => {
     empty.style.display = 'none';
 
     gallery.innerHTML = [...photos].reverse().map(p => `
-      <div class="photo-thumb" onclick="App.viewPhotos()">
-        <img src="${p.dataUrl}" alt="Progress photo ${formatDateShort(p.date)}" loading="lazy">
+      <div class="photo-thumb" data-action="view-photos">
+        <img src="${escapeHtml(p.dataUrl)}" alt="Progress photo ${formatDateShort(p.date)}" loading="lazy">
         <span class="photo-thumb-date">${formatDateShort(p.date)}</span>
-        <button class="photo-thumb-delete" onclick="event.stopPropagation();App.removePhoto('${p.id}')" aria-label="Delete photo">&times;</button>
+        <button class="photo-thumb-delete" data-action="remove-photo" data-id="${escapeHtml(p.id)}" aria-label="Delete photo">&times;</button>
       </div>
     `).join('');
   }
@@ -2445,7 +2506,7 @@ const App = (() => {
     const rightSel = document.getElementById('photo-compare-right');
 
     const options = photos.map(p =>
-      '<option value="' + p.id + '">' + formatDateShort(p.date) + (p.note ? ' - ' + p.note : '') + '</option>'
+      '<option value="' + escapeHtml(p.id) + '">' + formatDateShort(p.date) + (p.note ? ' - ' + escapeHtml(p.note) : '') + '</option>'
     ).join('');
 
     leftSel.innerHTML = options;
@@ -2471,8 +2532,8 @@ const App = (() => {
     const leftPhoto = photos.find(p => p.id === leftId);
     const rightPhoto = photos.find(p => p.id === rightId);
 
-    leftFrame.innerHTML = leftPhoto ? '<img src="' + leftPhoto.dataUrl + '" alt="Left comparison photo">' : 'No photo';
-    rightFrame.innerHTML = rightPhoto ? '<img src="' + rightPhoto.dataUrl + '" alt="Right comparison photo">' : 'No photo';
+    leftFrame.innerHTML = leftPhoto ? '<img src="' + escapeHtml(leftPhoto.dataUrl) + '" alt="Left comparison photo">' : 'No photo';
+    rightFrame.innerHTML = rightPhoto ? '<img src="' + escapeHtml(rightPhoto.dataUrl) + '" alt="Right comparison photo">' : 'No photo';
   }
 
   async function removePhoto(id) {
@@ -2498,10 +2559,10 @@ const App = (() => {
       <div class="nsv-item">
         <div class="nsv-category-icon">${nsvCategoryIcon(v.category)}</div>
         <div class="nsv-content">
-          <div class="nsv-text">${v.text}</div>
-          <div class="nsv-meta">${formatDateShort(v.date)} &middot; ${v.category}</div>
+          <div class="nsv-text">${escapeHtml(v.text)}</div>
+          <div class="nsv-meta">${formatDateShort(v.date)} &middot; ${escapeHtml(v.category)}</div>
         </div>
-        <button class="nsv-delete" onclick="App.removeVictory('${v.id}')" aria-label="Delete victory">&times;</button>
+        <button class="nsv-delete" data-action="remove-victory" data-id="${escapeHtml(v.id)}" aria-label="Delete victory">&times;</button>
       </div>
     `).join('');
     staggerListItems('#nsv-list .nsv-item');
@@ -3093,12 +3154,13 @@ const App = (() => {
       if (m.waist) parts.push('W:' + m.waist);
       if (m.hips) parts.push('H:' + m.hips);
       if (m.chest) parts.push('C:' + m.chest);
-      return '<div class="measurement-item"><div class="measurement-item-info"><div class="measurement-item-date">' + formatDateShort(m.date) + '</div><div class="measurement-item-values">' + parts.join(' | ') + ' cm</div></div><div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm" onclick="App.editMeasurement(\'' + m.id + '\')" aria-label="Edit measurement">Edit</button><button class="btn btn-ghost btn-sm" onclick="App.removeMeasurement(\'' + m.id + '\')" aria-label="Delete measurement">Del</button></div></div>';
+      return '<div class="measurement-item"><div class="measurement-item-info"><div class="measurement-item-date">' + formatDateShort(m.date) + '</div><div class="measurement-item-values">' + escapeHtml(parts.join(' | ')) + ' cm</div></div><div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm" data-action="edit-measurement" data-id="' + escapeHtml(m.id) + '" aria-label="Edit measurement">Edit</button><button class="btn btn-ghost btn-sm" data-action="remove-measurement" data-id="' + escapeHtml(m.id) + '" aria-label="Delete measurement">Del</button></div></div>';
     }).join('');
     staggerListItems('#measurement-list .measurement-item');
   }
 
   function renderMeasurementChart(measurements) {
+    if (measurementChart && chartDataHash('measurements', measurements)) return;
     const colors = getChartColors();
     measurementChart = destroyChart(measurementChart);
     const ctx = document.getElementById('chart-measurements').getContext('2d');
@@ -3319,7 +3381,7 @@ const App = (() => {
       const moodText = j.mood ? moodLabels[j.mood] || j.mood : '';
       const energyText = j.energy ? energyLabels[j.energy] || j.energy : '';
       const tags = [moodText ? 'Mood: ' + moodText : '', energyText ? 'Energy: ' + energyText : ''].filter(Boolean).join(' | ');
-      return '<div class="journal-item"><div class="journal-item-info"><div class="journal-item-date">' + formatDateShort(j.date) + '</div>' + (tags ? '<div class="journal-item-tags">' + tags + '</div>' : '') + (j.text ? '<div class="journal-item-text">' + j.text + '</div>' : '') + '</div><div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm" onclick="App.editJournalEntry(\'' + j.id + '\')" aria-label="Edit journal">Edit</button><button class="btn btn-ghost btn-sm" onclick="App.removeJournalEntry(\'' + j.id + '\')" aria-label="Delete journal">Del</button></div></div>';
+      return '<div class="journal-item"><div class="journal-item-info"><div class="journal-item-date">' + formatDateShort(j.date) + '</div>' + (tags ? '<div class="journal-item-tags">' + escapeHtml(tags) + '</div>' : '') + (j.text ? '<div class="journal-item-text">' + escapeHtml(j.text) + '</div>' : '') + '</div><div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm" data-action="edit-journal" data-id="' + escapeHtml(j.id) + '" aria-label="Edit journal">Edit</button><button class="btn btn-ghost btn-sm" data-action="remove-journal" data-id="' + escapeHtml(j.id) + '" aria-label="Delete journal">Del</button></div></div>';
     }).join('');
     staggerListItems('#journal-list .journal-item');
   }
@@ -3426,7 +3488,7 @@ const App = (() => {
     list.innerHTML = sorted.map(ex => {
       const icon = typeIcons[ex.type] || '⚡';
       const typeName = ex.type ? ex.type.charAt(0).toUpperCase() + ex.type.slice(1) : 'Exercise';
-      return '<div class="exercise-item"><div class="exercise-item-icon">' + icon + '</div><div class="exercise-item-info"><div class="exercise-item-title">' + typeName + '</div><div class="exercise-item-sub">' + formatDateShort(ex.date) + ' | ' + (ex.duration || 0) + ' min | ' + (ex.intensity || 'moderate') + (ex.calories ? ' | ' + ex.calories + ' cal' : '') + '</div></div><div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm" onclick="App.editExercise(\'' + ex.id + '\')" aria-label="Edit exercise">Edit</button><button class="btn btn-ghost btn-sm" onclick="App.removeExercise(\'' + ex.id + '\')" aria-label="Delete exercise">Del</button></div></div>';
+      return '<div class="exercise-item"><div class="exercise-item-icon">' + icon + '</div><div class="exercise-item-info"><div class="exercise-item-title">' + escapeHtml(typeName) + '</div><div class="exercise-item-sub">' + formatDateShort(ex.date) + ' | ' + (ex.duration || 0) + ' min | ' + escapeHtml(ex.intensity || 'moderate') + (ex.calories ? ' | ' + ex.calories + ' cal' : '') + '</div></div><div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm" data-action="edit-exercise" data-id="' + escapeHtml(ex.id) + '" aria-label="Edit exercise">Edit</button><button class="btn btn-ghost btn-sm" data-action="remove-exercise" data-id="' + escapeHtml(ex.id) + '" aria-label="Delete exercise">Del</button></div></div>';
     }).join('');
     staggerListItems('#exercise-list .exercise-item');
   }
@@ -3587,7 +3649,7 @@ const App = (() => {
       const duration = f.startTime && f.endTime ? Math.round((new Date(f.endTime) - new Date(f.startTime)) / (1000 * 60 * 60) * 10) / 10 : 0;
       const dateStr = f.startTime ? formatDateShort(f.startTime.split('T')[0]) : '--';
       const status = f.completed ? '<span style="color:var(--success)">Completed</span>' : '<span style="color:var(--text-muted)">Ended early</span>';
-      return '<div class="fasting-item"><div class="fasting-item-info"><div class="fasting-item-date">' + dateStr + ' | ' + f.protocol + '</div><div class="fasting-item-detail">' + duration + 'h / ' + f.targetHours + 'h target | ' + status + '</div></div><button class="btn btn-ghost btn-sm" onclick="App.removeFast(\'' + f.id + '\')" aria-label="Delete fast">Del</button></div>';
+      return '<div class="fasting-item"><div class="fasting-item-info"><div class="fasting-item-date">' + dateStr + ' | ' + escapeHtml(f.protocol) + '</div><div class="fasting-item-detail">' + duration + 'h / ' + f.targetHours + 'h target | ' + status + '</div></div><button class="btn btn-ghost btn-sm" data-action="remove-fast" data-id="' + escapeHtml(f.id) + '" aria-label="Delete fast">Del</button></div>';
     }).join('');
   }
 
