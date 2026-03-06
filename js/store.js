@@ -995,6 +995,7 @@ const Store = (() => {
   // Side effect trends
   function getSideEffectTrends() {
     const jabs = getJabs();
+    const journal = getJournal();
     const effectCounts = {};
     const monthlyEffects = {};
 
@@ -1009,7 +1010,18 @@ const Store = (() => {
       });
     });
 
-    return { effectCounts, monthlyEffects, totalDoses: jabs.length };
+    journal.forEach(j => {
+      if (!j.symptoms || j.symptoms.length === 0) return;
+      const month = j.date.substring(0, 7);
+      if (!monthlyEffects[month]) monthlyEffects[month] = {};
+      j.symptoms.forEach(s => {
+        if (s === 'none') return;
+        effectCounts[s] = (effectCounts[s] || 0) + 1;
+        monthlyEffects[month][s] = (monthlyEffects[month][s] || 0) + 1;
+      });
+    });
+
+    return { effectCounts, monthlyEffects, totalDoses: jabs.length, totalEntries: jabs.length + journal.length };
   }
 
   // Dose escalation log
