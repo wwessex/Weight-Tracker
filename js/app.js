@@ -1297,8 +1297,10 @@ const App = (() => {
       }
     }
 
-    settings.lastReminderCheckAt = new Date().toISOString();
-    Store.saveSettings(settings);
+    // Re-read settings to pick up any reminderDedup changes saved by shouldSendReminder
+    var latestSettings = Store.getSettings();
+    latestSettings.lastReminderCheckAt = new Date().toISOString();
+    Store.saveSettings(latestSettings);
     refreshReminderCapabilityStatus();
   }
 
