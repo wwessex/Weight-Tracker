@@ -2292,6 +2292,22 @@ textarea:focus-visible {
   margin-top: 2px;
 }
 
+.journal-item-symptoms {
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.symptom-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  background: rgba(20,184,166,0.12);
+  color: var(--teal, #14b8a6);
+}
+
 .journal-item-text {
   font-size: 0.85rem;
   color: var(--text-secondary);

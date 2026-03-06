@@ -2072,7 +2072,7 @@ const App = (() => {
           <div class="side-effect-bar-track">
             <div class="side-effect-bar-fill" style="width:${pct}%"></div>
           </div>
-          <span class="side-effect-bar-count">${count}/${trends.totalDoses}</span>
+          <span class="side-effect-bar-count">${count}</span>
         </div>
       `;
     }).join('');
@@ -3304,6 +3304,7 @@ const App = (() => {
         date: document.getElementById('journal-date').value,
         mood: document.getElementById('journal-mood').value ? parseInt(document.getElementById('journal-mood').value) : null,
         energy: document.getElementById('journal-energy').value ? parseInt(document.getElementById('journal-energy').value) : null,
+        symptoms: Array.from(document.querySelectorAll('input[name="journal-symptom"]:checked')).map(cb => cb.value),
         text: document.getElementById('journal-text').value,
       };
       if (id) {
@@ -3373,6 +3374,9 @@ const App = (() => {
       document.querySelectorAll('#energy-picker .mood-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.value === String(j.energy));
       });
+      document.querySelectorAll('input[name="journal-symptom"]').forEach(cb => {
+        cb.checked = j.symptoms && j.symptoms.includes(cb.value);
+      });
     } else {
       document.getElementById('journal-edit-id').value = '';
       document.getElementById('journal-modal-title').textContent = 'Journal Entry';
@@ -3382,6 +3386,7 @@ const App = (() => {
       document.getElementById('journal-text').value = '';
       document.querySelectorAll('#mood-picker .mood-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('#energy-picker .mood-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('input[name="journal-symptom"]').forEach(cb => cb.checked = false);
     }
     openModal(modal);
   }
@@ -3441,7 +3446,12 @@ const App = (() => {
       const moodText = j.mood ? moodLabels[j.mood] || j.mood : '';
       const energyText = j.energy ? energyLabels[j.energy] || j.energy : '';
       const tags = [moodText ? 'Mood: ' + moodText : '', energyText ? 'Energy: ' + energyText : ''].filter(Boolean).join(' | ');
-      return '<div class="journal-item"><div class="journal-item-info"><div class="journal-item-date">' + formatDateShort(j.date) + '</div>' + (tags ? '<div class="journal-item-tags">' + escapeHtml(tags) + '</div>' : '') + (j.text ? '<div class="journal-item-text">' + escapeHtml(j.text) + '</div>' : '') + '</div><div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm" data-action="edit-journal" data-id="' + escapeHtml(j.id) + '" aria-label="Edit journal">Edit</button><button class="btn btn-ghost btn-sm" data-action="remove-journal" data-id="' + escapeHtml(j.id) + '" aria-label="Delete journal">Del</button></div></div>';
+      const symptomHtml = (j.symptoms && j.symptoms.length && !(j.symptoms.length === 1 && j.symptoms[0] === 'none'))
+        ? '<div class="journal-item-symptoms">' + j.symptoms.filter(s => s !== 'none').map(s =>
+            '<span class="symptom-tag">' + escapeHtml(s.replace('-', ' ')) + '</span>'
+          ).join('') + '</div>'
+        : '';
+      return '<div class="journal-item"><div class="journal-item-info"><div class="journal-item-date">' + formatDateShort(j.date) + '</div>' + (tags ? '<div class="journal-item-tags">' + escapeHtml(tags) + '</div>' : '') + symptomHtml + (j.text ? '<div class="journal-item-text">' + escapeHtml(j.text) + '</div>' : '') + '</div><div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm" data-action="edit-journal" data-id="' + escapeHtml(j.id) + '" aria-label="Edit journal">Edit</button><button class="btn btn-ghost btn-sm" data-action="remove-journal" data-id="' + escapeHtml(j.id) + '" aria-label="Delete journal">Del</button></div></div>';
     }).join('');
     staggerListItems('#journal-list .journal-item');
   }
