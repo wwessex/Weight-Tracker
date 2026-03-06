@@ -957,12 +957,12 @@ const App = (() => {
   }
 
   function getReminderCapabilityStatus() {
-    if (canUseNativeNotifications()) return 'native push';
-    if (canUseServiceWorkerNotifications()) return 'native push';
-    if (reminderSyncCapabilities && (reminderSyncCapabilities.periodicSync || reminderSyncCapabilities.backgroundSync)) {
-      return 'native push';
-    }
-    return 'in-app only';
+    if (!('Notification' in window)) return 'in-app only';
+    if (Notification.permission === 'denied') return 'in-app only (notifications blocked)';
+    if (Notification.permission === 'granted') return 'native push';
+    // permission === 'default' — not yet asked
+    if (canUseServiceWorkerNotifications()) return 'native push (pending permission)';
+    return 'in-app only (tap "Test Notification" to enable)';
   }
 
   function refreshReminderCapabilityStatus() {
@@ -1135,21 +1135,63 @@ const App = (() => {
     container.appendChild(banner);
   }
 
-  async function sendReminder(title, message, type) {
-    if (canUseNativeNotifications()) {
-      new Notification(title, { body: message, icon: 'icons/icon-192.png' });
-      return;
+  // Safari-compatible requestPermission: handles both callback and Promise patterns
+  function safariRequestPermission(callback) {
+    var called = false;
+    function once(perm) {
+      if (called) return;
+      called = true;
+      callback(perm);
     }
+    try {
+      // Pass callback for legacy Safari (callback pattern), capture return for Promise pattern
+      var result = Notification.requestPermission(once);
+      if (result && typeof result.then === 'function') {
+        result.then(once).catch(function() { once('denied'); });
+      }
+    } catch (e) {
+      once('denied');
+    }
+  }
 
+  // Send a test notification, preferring ServiceWorker for Safari PWA compatibility
+  async function sendTestNotification() {
+    // Safari PWAs require ServiceWorker-based notifications, not new Notification()
     if ('serviceWorker' in navigator) {
       try {
-        const registration = await navigator.serviceWorker.ready;
+        var registration = await navigator.serviceWorker.ready;
+        if (registration && registration.showNotification) {
+          await registration.showNotification('Jab It - Test', { body: 'Notifications are working!', icon: 'icons/icon-192.png', tag: 'test' });
+          return;
+        }
+      } catch (e) {
+        // Fall through to new Notification()
+      }
+    }
+    new Notification('Jab It - Test', { body: 'Notifications are working!', icon: 'icons/icon-192.png' });
+  }
+
+  async function sendReminder(title, message, type) {
+    // Prefer ServiceWorker notifications (required for Safari PWAs where new Notification() throws)
+    if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator) {
+      try {
+        var registration = await navigator.serviceWorker.ready;
         if (registration && registration.showNotification) {
           await registration.showNotification(title, { body: message, icon: 'icons/icon-192.png', tag: type });
           return;
         }
-      } catch {
-        // Fall through to in-app banner.
+      } catch (e) {
+        // Fall through to new Notification() or in-app banner
+      }
+    }
+
+    // Fallback to Notification constructor (works in most desktop browsers)
+    if (canUseNativeNotifications()) {
+      try {
+        new Notification(title, { body: message, icon: 'icons/icon-192.png' });
+        return;
+      } catch (e) {
+        // Safari PWA throws TypeError on new Notification() — fall through to banner
       }
     }
 
@@ -2889,21 +2931,23 @@ const App = (() => {
         return;
       }
       if (Notification.permission === 'granted') {
-        new Notification('Jab It - Test', { body: 'Notifications are working!', icon: 'icons/icon-192.png' });
+        sendTestNotification();
         toast('Test notification sent!', 'success');
       } else if (Notification.permission === 'denied') {
         // Still show in-app banner as fallback
         showReminderBanner('dose', 'This is a test reminder. In-app banners will appear on the Summary page when reminders are due.');
         toast('Browser notifications blocked. In-app reminders will be used instead.', 'error');
       } else {
-        Notification.requestPermission().then(perm => {
+        // Safari (older) uses callback, modern browsers return a Promise
+        safariRequestPermission(function(perm) {
           if (perm === 'granted') {
-            new Notification('Jab It - Test', { body: 'Notifications are working!', icon: 'icons/icon-192.png' });
+            sendTestNotification();
             toast('Notifications enabled!', 'success');
           } else {
             showReminderBanner('dose', 'This is a test reminder. In-app banners will appear on the Summary page when reminders are due.');
             toast('Using in-app reminders instead.', 'success');
           }
+          refreshReminderCapabilityStatus();
         });
       }
     });
@@ -3042,9 +3086,9 @@ const App = (() => {
       toast('All weights converted to ' + newUnit + '!', 'success');
     }
 
-    // Request notification permission if reminders enabled
+    // Request notification permission if reminders enabled (Safari-compatible)
     if ((settings.doseReminderEnabled || settings.weighInReminderEnabled) && 'Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
+      safariRequestPermission(function() { refreshReminderCapabilityStatus(); });
     }
 
     applyTheme();
