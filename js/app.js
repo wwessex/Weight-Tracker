@@ -1812,6 +1812,15 @@ const App = (() => {
         }
         toast('Dose logged!', 'success');
       }
+      // Sync profile dosage/medication with the latest dose entry
+      const prof = Store.getProfile();
+      if (entry.dose && entry.dose !== prof.dosage) {
+        prof.dosage = entry.dose;
+      }
+      if (entry.medication && entry.medication !== prof.medication) {
+        prof.medication = entry.medication;
+      }
+      Store.saveProfile(prof);
       closeModal(doseModal);
       refreshDoses();
       refreshSummary();
@@ -1849,7 +1858,7 @@ const App = (() => {
       document.getElementById('dose-date').value = formatLocalDate(new Date());
       document.getElementById('dose-time').value = new Date().toTimeString().slice(0, 5);
       document.getElementById('dose-medication').value = profile.medication || 'semaglutide';
-      document.getElementById('dose-amount').value = '';
+      document.getElementById('dose-amount').value = profile.dosage ? parseFloat(profile.dosage) || '' : '';
       document.getElementById('dose-unit').value = 'mg';
       // Pre-select recommended site
       const siteRec = Store.getNextRecommendedSite();
