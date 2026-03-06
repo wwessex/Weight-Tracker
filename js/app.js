@@ -1652,36 +1652,63 @@ const App = (() => {
         return;
       }
       const target = new Date(targetDate);
-      target.setHours(23, 59, 59, 999);
+      // Use the exact time from the last dose so countdown is to the same time of day
+      if (stats.nextJabTime) {
+        const timeParts = stats.nextJabTime.split(':');
+        target.setHours(parseInt(timeParts[0], 10) || 0, parseInt(timeParts[1], 10) || 0, 0, 0);
+      } else {
+        // No time recorded — default to start of day
+        target.setHours(0, 0, 0, 0);
+      }
       const diffMs = target - now;
-      const diffDays = dayDiff(new Date(), stats.nextJabDate);
-      const diffHours = Math.max(0, Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)));
+      const totalHours = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60)));
+      const diffDays = Math.floor(totalHours / 24);
+      const diffHours = totalHours % 24;
+      const diffMins = Math.max(0, Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60)));
+
+      // Format the due time for display
+      const dueTimeStr = target.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
       if (diffMs <= 0) {
         ringValue.textContent = 'Due!';
         ringSub.textContent = '';
         ringInfo.textContent = 'Time for your next dose';
         detail.style.display = 'none';
-      } else if (diffDays <= 1) {
-        ringValue.textContent = diffHours;
-        ringSub.textContent = diffHours === 1 ? 'hour' : 'hours';
+      } else if (diffDays === 0) {
+        if (diffHours === 0) {
+          ringValue.textContent = diffMins;
+          ringSub.textContent = diffMins === 1 ? 'minute' : 'minutes';
+        } else {
+          ringValue.textContent = diffHours;
+          ringSub.textContent = diffHours === 1 ? 'hour' : 'hours';
+        }
         ringInfo.textContent = 'until next dose';
         detail.style.display = 'block';
-        detail.textContent = 'Due ' + formatDate(stats.nextJabDate);
+        detail.textContent = 'Due today at ' + dueTimeStr;
       } else {
         ringValue.textContent = diffDays;
         ringSub.textContent = diffDays === 1 ? 'day' : 'days';
         ringInfo.textContent = 'until next dose';
         detail.style.display = 'block';
-        detail.textContent = diffDays + 'd ' + diffHours + 'h remaining';
+        detail.textContent = diffDays + 'd ' + diffHours + 'h remaining \u00B7 ' + formatDate(stats.nextJabDate) + ' at ' + dueTimeStr;
       }
     }
     updateCountdown();
     countdownInterval = setInterval(updateCountdown, 60000);
 
-    const diff = dayDiff(new Date(), stats.nextJabDate);
-    const elapsed = cycleDays - Math.max(0, diff);
-    const progress = Math.max(0, Math.min(1, elapsed / cycleDays));
+    // Calculate progress using exact time for accurate ring fill
+    const targetForRing = parseLocalDate(stats.nextJabDate);
+    let progress = 0;
+    if (targetForRing) {
+      if (stats.nextJabTime) {
+        const tp = stats.nextJabTime.split(':');
+        targetForRing.setHours(parseInt(tp[0], 10) || 0, parseInt(tp[1], 10) || 0, 0, 0);
+      }
+      const cycleDuration = cycleDays * 24 * 60 * 60 * 1000;
+      const remaining = targetForRing - new Date();
+      const elapsed = cycleDuration - Math.max(0, remaining);
+      progress = Math.max(0, Math.min(1, elapsed / cycleDuration));
+    }
 
     doseRingChart = new Chart(ctx, {
       type: 'doughnut',
