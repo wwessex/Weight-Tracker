@@ -242,6 +242,7 @@
               <input type="email" id="ob-signin-email" placeholder="you@example.com" required autocomplete="email">
             </div>
             <button type="submit" class="btn btn-primary btn-block" id="btn-ob-send-magic-link">Send Magic Link</button>
+            <button type="button" class="btn btn-outline btn-block" id="btn-ob-passkey" style="display:none;">Sign in with Passkey</button>
           </form>
           <div id="ob-signin-sent" style="display:none;">
             <div style="text-align:center;padding:20px 0;">
@@ -279,13 +280,14 @@
         <button class="btn-close" id="auth-modal-close" aria-label="Close">&times;</button>
       </div>
       <div class="modal-body">
-        <p class="form-help">Sign in with your email to back up your data to the cloud. No password needed &mdash; we'll send you a magic link.</p>
+        <p class="form-help">Sign in with your email to back up your data to the cloud. Use a magic link, or use passkey sign-in when supported by your browser.</p>
         <form id="auth-form">
           <div class="form-group">
             <label for="auth-email">Email address</label>
             <input type="email" id="auth-email" placeholder="you@example.com" required autocomplete="email">
           </div>
           <button type="submit" class="btn btn-primary btn-block" id="btn-send-magic-link">Send Magic Link</button>
+          <button type="button" class="btn btn-outline btn-block" id="btn-sign-in-passkey" style="display:none;">Sign in with Passkey</button>
         </form>
         <div id="auth-magic-link-sent" style="display:none;">
           <div style="text-align:center;padding:20px 0;">
