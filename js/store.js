@@ -510,12 +510,55 @@ const Store = (() => {
     const sideEffects = getSideEffectTrends();
     const escalations = getDoseEscalations();
     const rateOfLoss = getRateOfLoss(90);
+    const exerciseStats = getExerciseStats(90);
+    const moodTrend = getMoodTrend(90);
     const cutoff90 = new Date();
     cutoff90.setDate(cutoff90.getDate() - 90);
     const cutoffStr = formatLocalDate(cutoff90);
+    const recentDoses = jabs.filter(j => j.date >= cutoffStr);
+
+    // Medication adherence calculation
+    const freq = profile.frequency || 'weekly';
+    let expectedDoses = 0;
+    const daysInPeriod = Math.min(stats.daysOnPlan || 0, 90);
+    if (freq === 'daily') expectedDoses = daysInPeriod;
+    else if (freq === 'weekly') expectedDoses = Math.round(daysInPeriod / 7);
+    else if (freq === 'biweekly') expectedDoses = Math.round(daysInPeriod / 14);
+    else if (freq === 'monthly') expectedDoses = Math.round(daysInPeriod / 30);
+    else expectedDoses = Math.round(daysInPeriod / 7);
+    const adherenceRate = expectedDoses > 0 ? Math.min(100, Math.round((recentDoses.length / expectedDoses) * 100)) : null;
+
+    // Injection site distribution from recent doses
+    const siteDistribution = {};
+    recentDoses.forEach(d => {
+      if (d.site) siteDistribution[d.site] = (siteDistribution[d.site] || 0) + 1;
+    });
+
+    // Measurement trends: earliest and latest in period
+    const recentMeasurements = measurements.filter(m => m.date >= cutoffStr);
+    const earliestMeasurement = recentMeasurements.length > 0 ? recentMeasurements[0] : null;
+    const latestMeasurement = recentMeasurements.length > 0 ? recentMeasurements[recentMeasurements.length - 1] : (measurements.length > 0 ? measurements[measurements.length - 1] : null);
+
+    // Mood/energy averages
+    let moodAvg = null;
+    let energyAvg = null;
+    const moodEntries = moodTrend.filter(m => m.mood != null);
+    const energyEntries = moodTrend.filter(m => m.energy != null);
+    if (moodEntries.length > 0) moodAvg = Math.round(moodEntries.reduce((s, m) => s + m.mood, 0) / moodEntries.length * 10) / 10;
+    if (energyEntries.length > 0) energyAvg = Math.round(energyEntries.reduce((s, m) => s + m.energy, 0) / energyEntries.length * 10) / 10;
+
+    // Side effects monthly (last 3 months)
+    const now = new Date();
+    const recentMonths = [];
+    for (let i = 0; i < 3; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      recentMonths.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+    }
+
     return {
       patient: {
         name: profile.name,
+        age: profile.age,
         height: profile.height,
         heightUnit: profile.heightUnit,
         medication: profile.medication,
@@ -529,15 +572,34 @@ const Store = (() => {
         totalLost: stats.totalLost ? Math.round(stats.totalLost * 10) / 10 : 0,
         bmi: stats.bmi ? Math.round(stats.bmi * 10) / 10 : null,
         rateOfLoss: rateOfLoss,
+        weightChange7d: stats.weightChange7d ? Math.round(stats.weightChange7d * 10) / 10 : 0,
+        weightChange30d: stats.weightChange30d ? Math.round(stats.weightChange30d * 10) / 10 : 0,
+        avgWeeklyLoss: stats.avgWeeklyLoss ? Math.round(stats.avgWeeklyLoss * 10) / 10 : 0,
         unit: settings.weightUnit,
         targetWeight: goals.targetWeight,
         progressPercent: Math.round(stats.progressPercent),
+        projectedGoalDate: getProjectedGoalDate(),
+      },
+      adherence: {
+        expected: expectedDoses,
+        actual: recentDoses.length,
+        rate: adherenceRate,
       },
       recentWeights: weights.filter(w => w.date >= cutoffStr).slice(-20),
-      recentDoses: jabs.filter(j => j.date >= cutoffStr),
+      recentDoses: recentDoses,
       sideEffects: sideEffects.effectCounts,
+      monthlyEffects: sideEffects.monthlyEffects,
+      recentMonths: recentMonths,
       doseEscalations: escalations,
-      latestMeasurements: measurements.length > 0 ? measurements[measurements.length - 1] : null,
+      siteDistribution: siteDistribution,
+      latestMeasurements: latestMeasurement,
+      earliestMeasurements: earliestMeasurement,
+      exerciseStats: exerciseStats,
+      wellbeing: {
+        moodAvg: moodAvg,
+        energyAvg: energyAvg,
+        entries: moodEntries.length,
+      },
       reportDate: formatLocalDate(new Date()),
       daysOnPlan: stats.daysOnPlan,
     };
