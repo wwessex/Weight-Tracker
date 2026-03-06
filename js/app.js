@@ -439,6 +439,16 @@ const App = (() => {
       });
     }
 
+
+    var obPasskeyBtn = document.getElementById('btn-ob-passkey');
+    if (obPasskeyBtn) {
+      obPasskeyBtn.style.display = canUsePasskeys() ? '' : 'none';
+      obPasskeyBtn.addEventListener('click', function () {
+        var email = document.getElementById('ob-signin-email').value.trim();
+        startPasskeySignIn(email, { button: obPasskeyBtn, source: 'onboarding' });
+      });
+    }
+
     // --- Import backup file from welcome screen ---
     obImportFile.addEventListener('change', async function (e) {
       var file = e.target.files[0];
@@ -1014,6 +1024,38 @@ const App = (() => {
     if (typeof Sync !== 'undefined' && typeof Auth !== 'undefined' && Auth.isLoggedIn()) {
       Sync.syncOnResume();
     }
+  }
+
+
+  function canUsePasskeys() {
+    return typeof Auth !== 'undefined' && Auth.isConfigured() && Auth.supportsPasskeys && Auth.supportsPasskeys();
+  }
+
+  function startPasskeySignIn(email, opts) {
+    var options = opts || {};
+    var button = options.button || null;
+    var source = options.source || 'passkey';
+    if (!email) {
+      toast('Enter your email first so we can find your account.', 'error');
+      return;
+    }
+    if (!canUsePasskeys()) {
+      toast('Passkeys are not available yet in this browser. Use the magic link option.', 'error');
+      return;
+    }
+
+    if (button) button.disabled = true;
+    Auth.signInWithPasskey(email).then(function (result) {
+      if (result && result.error) {
+        toast(result.error.message || 'Passkey sign-in failed. Try magic link instead.', 'error');
+        return;
+      }
+      toast(source === 'onboarding' ? 'Passkey accepted. Signing you in...' : 'Signed in with passkey.', 'success');
+    }).catch(function (err) {
+      toast((err && err.message) || 'Passkey sign-in failed. Try magic link instead.', 'error');
+    }).finally(function () {
+      if (button) button.disabled = false;
+    });
   }
 
   // ===== AUTH / SYNC =====
@@ -2992,6 +3034,11 @@ const App = (() => {
         document.getElementById('auth-email').value = '';
         const sendBtn = document.getElementById('btn-send-magic-link');
         if (sendBtn) sendBtn.disabled = false;
+        const passkeyBtn = document.getElementById('btn-sign-in-passkey');
+        if (passkeyBtn) {
+          passkeyBtn.disabled = false;
+          passkeyBtn.style.display = canUsePasskeys() ? '' : 'none';
+        }
         openModal(authModal);
       });
     }
@@ -3019,6 +3066,16 @@ const App = (() => {
         });
       });
     }
+
+    const btnPasskeySignIn = document.getElementById('btn-sign-in-passkey');
+    if (btnPasskeySignIn) {
+      btnPasskeySignIn.style.display = canUsePasskeys() ? '' : 'none';
+      btnPasskeySignIn.addEventListener('click', function () {
+        const email = document.getElementById('auth-email').value.trim();
+        startPasskeySignIn(email, { button: btnPasskeySignIn, source: 'settings' });
+      });
+    }
+
 
     const authModalClose = document.getElementById('auth-modal-close');
     if (authModalClose) {

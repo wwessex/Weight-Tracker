@@ -1,4 +1,4 @@
-// Authentication module — magic link (passwordless) auth via Supabase
+// Authentication module — passwordless auth via Supabase
 const Auth = (() => {
   let client = null;
   let currentSession = null;
@@ -98,6 +98,22 @@ const Auth = (() => {
     return Promise.race([otpPromise, timeoutPromise]);
   }
 
+  function supportsPasskeys() {
+    if (!client) return false;
+    return typeof client.auth.signInWithWebAuthn === 'function';
+  }
+
+  function signInWithPasskey(email) {
+    if (!client) return Promise.reject(new Error('Sign-in is not available. Please check your connection and try again.'));
+    if (!supportsPasskeys()) {
+      return Promise.reject(new Error('Passkeys are not available in this browser or Supabase client version yet.'));
+    }
+
+    return client.auth.signInWithWebAuthn({
+      email: email,
+    });
+  }
+
   function signOut() {
     if (!client) return Promise.resolve();
     return client.auth.signOut().then(function () {
@@ -112,7 +128,9 @@ const Auth = (() => {
     getSession: getSession,
     getUser: getUser,
     isLoggedIn: isLoggedIn,
+    supportsPasskeys: supportsPasskeys,
     signInWithMagicLink: signInWithMagicLink,
+    signInWithPasskey: signInWithPasskey,
     signOut: signOut,
   };
 })();
