@@ -1407,7 +1407,7 @@ const App = (() => {
       if (combinedStreak > 0) {
         counter.style.display = 'inline-flex';
         document.getElementById('streak-value').textContent = combinedStreak;
-        document.getElementById('streak-label').textContent = combinedStreak === 1 ? 'week streak' : 'week streak';
+        document.getElementById('streak-label').textContent = combinedStreak === 1 ? 'week streak' : 'weeks streak';
       } else {
         counter.style.display = 'none';
       }
@@ -2084,7 +2084,7 @@ const App = (() => {
   function removeDose(id) {
     if (!confirm('Delete this dose entry?')) return;
     Store.deleteJab(id);
-    toast('Dose deleted');
+    toast('Dose deleted', 'success');
     refreshDoses();
     refreshSummary();
   }
@@ -2539,7 +2539,7 @@ const App = (() => {
   async function removePhoto(id) {
     if (!confirm('Delete this photo?')) return;
     await Store.deletePhoto(id);
-    toast('Photo deleted');
+    toast('Photo deleted', 'success');
     await renderPhotoGallery();
   }
 
@@ -2571,14 +2571,14 @@ const App = (() => {
   function removeVictory(id) {
     if (!confirm('Delete this entry?')) return;
     Store.deleteVictory(id);
-    toast('Entry deleted');
+    toast('Entry deleted', 'success');
     renderNSVList();
   }
 
   function removeWeight(id) {
     if (!confirm('Delete this weight entry?')) return;
     Store.deleteWeight(id);
-    toast('Entry deleted');
+    toast('Entry deleted', 'success');
     refreshProgress();
     refreshSummary();
   }
@@ -2862,7 +2862,7 @@ const App = (() => {
       if (!confirm('Are you sure you want to delete ALL data? This cannot be undone.')) return;
       if (!confirm('Really? This will clear all your entries and settings.')) return;
       Store.clearAll();
-      toast('All data cleared');
+      toast('All data cleared', 'success');
       window.location.reload();
     });
 
@@ -3217,7 +3217,7 @@ const App = (() => {
   function removeMeasurement(id) {
     if (!confirm('Delete this measurement?')) return;
     Store.deleteMeasurement(id);
-    toast('Measurement deleted');
+    toast('Measurement deleted', 'success');
     refreshProgress();
   }
 
@@ -3453,7 +3453,7 @@ const App = (() => {
   function removeJournalEntry(id) {
     if (!confirm('Delete this journal entry?')) return;
     Store.deleteJournalEntry(id);
-    toast('Entry deleted');
+    toast('Entry deleted', 'success');
     refreshJournal();
   }
 
@@ -3496,7 +3496,7 @@ const App = (() => {
   function removeExercise(id) {
     if (!confirm('Delete this exercise?')) return;
     Store.deleteExercise(id);
-    toast('Exercise deleted');
+    toast('Exercise deleted', 'success');
     refreshJournal();
   }
 
@@ -3539,7 +3539,7 @@ const App = (() => {
   function cancelFast() {
     if (!confirm('Cancel this fast?')) return;
     Store.clearActiveFast();
-    toast('Fast cancelled');
+    toast('Fast cancelled', 'success');
     refreshFastingTimer();
   }
 
@@ -3656,7 +3656,7 @@ const App = (() => {
   function removeFast(id) {
     if (!confirm('Delete this fast?')) return;
     Store.deleteFast(id);
-    toast('Fast deleted');
+    toast('Fast deleted', 'success');
     refreshFastingHistory();
   }
 
