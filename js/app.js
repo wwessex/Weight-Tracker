@@ -3738,6 +3738,13 @@ const App = (() => {
     const medLabels = { semaglutide: 'Semaglutide (Ozempic/Wegovy)', tirzepatide: 'Tirzepatide (Mounjaro/Zepbound)', liraglutide: 'Liraglutide (Saxenda)', other: 'Other', none: 'None' };
     const medName = medLabels[report.patient.medication] || report.patient.medication || 'Not specified';
 
+    const siteLabels = { 'abdomen-left': 'Abdomen (L)', 'abdomen-right': 'Abdomen (R)', 'thigh-left': 'Thigh (L)', 'thigh-right': 'Thigh (R)', 'arm-left': 'Arm (L)', 'arm-right': 'Arm (R)' };
+
+    function formatChange(val) {
+      if (!val) return '0';
+      return (val > 0 ? '+' : '') + val;
+    }
+
     let html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Doctor Visit Report - ' + report.reportDate + '</title>';
     html += '<style>body{font-family:Inter,Arial,sans-serif;max-width:800px;margin:0 auto;padding:20px;color:#1e293b;font-size:14px}';
     html += 'h1{font-size:22px;border-bottom:2px solid #6366f1;padding-bottom:8px;margin-bottom:4px}';
@@ -3746,7 +3753,10 @@ const App = (() => {
     html += '.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:12px 0}';
     html += '.stat-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center}';
     html += '.stat-value{font-size:24px;font-weight:700;color:#0f172a}.stat-label{font-size:11px;color:#64748b;margin-top:2px}';
+    html += '.stat-sub{font-size:10px;color:#94a3b8;margin-top:2px}';
     html += 'table{width:100%;border-collapse:collapse;margin:8px 0;font-size:13px}th,td{padding:6px 10px;border:1px solid #e2e8f0;text-align:left}th{background:#f1f5f9;font-weight:600}';
+    html += '.inline-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:12px 0}';
+    html += '.change-pos{color:#16a34a}.change-neg{color:#dc2626}';
     html += '.footer{margin-top:32px;text-align:center;color:#94a3b8;font-size:11px;border-top:1px solid #e2e8f0;padding-top:12px}';
     html += '@media print{body{margin:0;padding:10px}}</style></head><body>';
 
@@ -3755,9 +3765,10 @@ const App = (() => {
 
     // Patient info
     html += '<h2>Patient Information</h2>';
-    html += '<table><tr><th>Name</th><td>' + (report.patient.name || '--') + '</td><th>Height</th><td>' + (report.patient.height || '--') + ' ' + (report.patient.heightUnit || 'cm') + '</td></tr>';
+    html += '<table><tr><th>Name</th><td>' + (report.patient.name || '--') + '</td><th>Age</th><td>' + (report.patient.age || '--') + '</td></tr>';
+    html += '<tr><th>Height</th><td>' + (report.patient.height || '--') + ' ' + (report.patient.heightUnit || 'cm') + '</td><th>Start Date</th><td>' + (report.patient.startDate || '--') + '</td></tr>';
     html += '<tr><th>Medication</th><td>' + medName + '</td><th>Dosage</th><td>' + (report.patient.dosage || '--') + '</td></tr>';
-    html += '<tr><th>Frequency</th><td>' + (report.patient.frequency || '--') + '</td><th>Start Date</th><td>' + (report.patient.startDate || '--') + '</td></tr></table>';
+    html += '<tr><th>Frequency</th><td>' + (report.patient.frequency || '--') + '</td><th>Target Weight</th><td>' + (report.weightSummary.targetWeight ? report.weightSummary.targetWeight + ' ' + unit : '--') + '</td></tr></table>';
 
     // Weight summary
     html += '<h2>Weight Summary</h2>';
@@ -3767,16 +3778,44 @@ const App = (() => {
     html += '<div class="stat-box"><div class="stat-value">' + (report.weightSummary.bmi || '--') + '</div><div class="stat-label">BMI</div></div>';
     html += '</div>';
     html += '<div class="stats-grid">';
-    html += '<div class="stat-box"><div class="stat-value">' + (report.weightSummary.startWeight ? report.weightSummary.startWeight.toFixed(1) : '--') + ' ' + unit + '</div><div class="stat-label">Start Weight</div></div>';
+    html += '<div class="stat-box"><div class="stat-value">' + formatChange(report.weightSummary.weightChange7d) + ' ' + unit + '</div><div class="stat-label">7-Day Change</div></div>';
+    html += '<div class="stat-box"><div class="stat-value">' + formatChange(report.weightSummary.weightChange30d) + ' ' + unit + '</div><div class="stat-label">30-Day Change</div></div>';
     html += '<div class="stat-box"><div class="stat-value">' + (report.weightSummary.rateOfLoss !== null ? report.weightSummary.rateOfLoss : '--') + ' ' + unit + '/wk</div><div class="stat-label">Rate of Loss (90d)</div></div>';
-    html += '<div class="stat-box"><div class="stat-value">' + report.weightSummary.progressPercent + '%</div><div class="stat-label">Goal Progress</div></div>';
     html += '</div>';
+    html += '<div class="stats-grid">';
+    html += '<div class="stat-box"><div class="stat-value">' + (report.weightSummary.startWeight ? report.weightSummary.startWeight.toFixed(1) : '--') + ' ' + unit + '</div><div class="stat-label">Start Weight</div></div>';
+    html += '<div class="stat-box"><div class="stat-value">' + (report.weightSummary.avgWeeklyLoss || '--') + ' ' + unit + '/wk</div><div class="stat-label">Avg Weekly Loss</div></div>';
+    html += '<div class="stat-box"><div class="stat-value">' + report.weightSummary.progressPercent + '%</div><div class="stat-label">Goal Progress</div>';
+    if (report.weightSummary.projectedGoalDate) {
+      html += '<div class="stat-sub">Est. ' + report.weightSummary.projectedGoalDate + '</div>';
+    }
+    html += '</div>';
+    html += '</div>';
+
+    // Medication adherence
+    if (report.adherence.rate !== null) {
+      html += '<h2>Medication Adherence (Last 90 Days)</h2>';
+      html += '<div class="stats-grid">';
+      html += '<div class="stat-box"><div class="stat-value">' + report.adherence.actual + '/' + report.adherence.expected + '</div><div class="stat-label">Doses Logged / Expected</div></div>';
+      html += '<div class="stat-box"><div class="stat-value">' + report.adherence.rate + '%</div><div class="stat-label">Adherence Rate</div></div>';
+      var sitesUsed = Object.keys(report.siteDistribution).length;
+      html += '<div class="stat-box"><div class="stat-value">' + sitesUsed + '</div><div class="stat-label">Injection Sites Used</div></div>';
+      html += '</div>';
+      // Injection site breakdown
+      if (sitesUsed > 0) {
+        html += '<table><tr><th>Injection Site</th><th>Times Used</th></tr>';
+        Object.entries(report.siteDistribution).sort(function(a, b) { return b[1] - a[1]; }).forEach(function(entry) {
+          html += '<tr><td>' + (siteLabels[entry[0]] || entry[0]) + '</td><td>' + entry[1] + '</td></tr>';
+        });
+        html += '</table>';
+      }
+    }
 
     // Recent weights
     if (report.recentWeights.length > 0) {
       html += '<h2>Recent Weight Entries (Last 90 Days)</h2>';
       html += '<table><tr><th>Date</th><th>Weight (' + unit + ')</th><th>Notes</th></tr>';
-      report.recentWeights.forEach(w => {
+      report.recentWeights.forEach(function(w) {
         html += '<tr><td>' + w.date + '</td><td>' + w.weight + '</td><td>' + (w.note || '') + '</td></tr>';
       });
       html += '</table>';
@@ -3786,19 +3825,33 @@ const App = (() => {
     if (report.recentDoses.length > 0) {
       html += '<h2>Dose History (Last 90 Days)</h2>';
       html += '<table><tr><th>Date</th><th>Dose</th><th>Site</th><th>Side Effects</th></tr>';
-      report.recentDoses.forEach(d => {
-        const effects = d.sideEffects && d.sideEffects.length > 0 ? d.sideEffects.join(', ') : 'None';
-        html += '<tr><td>' + d.date + '</td><td>' + (d.dose || '') + ' ' + (d.doseUnit || 'mg') + '</td><td>' + (d.site || '--') + '</td><td>' + effects + '</td></tr>';
+      report.recentDoses.forEach(function(d) {
+        var effects = d.sideEffects && d.sideEffects.length > 0 ? d.sideEffects.join(', ') : 'None';
+        html += '<tr><td>' + d.date + '</td><td>' + (d.dose || '') + ' ' + (d.doseUnit || 'mg') + '</td><td>' + (siteLabels[d.site] || d.site || '--') + '</td><td>' + effects + '</td></tr>';
       });
       html += '</table>';
     }
 
-    // Side effects summary
+    // Side effects summary with monthly trend
     if (report.sideEffects && Object.keys(report.sideEffects).length > 0) {
-      html += '<h2>Side Effect Summary (All Time)</h2>';
-      html += '<table><tr><th>Side Effect</th><th>Occurrences</th></tr>';
-      Object.entries(report.sideEffects).sort((a, b) => b[1] - a[1]).forEach(([effect, count]) => {
-        html += '<tr><td>' + effect.replace('-', ' ') + '</td><td>' + count + '</td></tr>';
+      html += '<h2>Side Effect Summary</h2>';
+      var hasMonthly = report.monthlyEffects && report.recentMonths;
+      html += '<table><tr><th>Side Effect</th><th>All Time</th>';
+      if (hasMonthly) {
+        report.recentMonths.forEach(function(month) { html += '<th>' + month + '</th>'; });
+      }
+      html += '</tr>';
+      Object.entries(report.sideEffects).sort(function(a, b) { return b[1] - a[1]; }).forEach(function(entry) {
+        var effect = entry[0];
+        var count = entry[1];
+        html += '<tr><td>' + effect.replace(/-/g, ' ') + '</td><td>' + count + '</td>';
+        if (hasMonthly) {
+          report.recentMonths.forEach(function(month) {
+            var monthData = report.monthlyEffects[month];
+            html += '<td>' + (monthData && monthData[effect] ? monthData[effect] : '0') + '</td>';
+          });
+        }
+        html += '</tr>';
       });
       html += '</table>';
     }
@@ -3807,24 +3860,71 @@ const App = (() => {
     if (report.doseEscalations.length > 0) {
       html += '<h2>Dose Escalation History</h2>';
       html += '<table><tr><th>Date</th><th>From</th><th>To</th><th>Direction</th></tr>';
-      report.doseEscalations.forEach(e => {
+      report.doseEscalations.forEach(function(e) {
         html += '<tr><td>' + e.date + '</td><td>' + e.fromDose + ' ' + e.unit + '</td><td>' + e.toDose + ' ' + e.unit + '</td><td>' + e.direction + '</td></tr>';
       });
       html += '</table>';
     }
 
-    // Latest measurements
+    // Body measurements with trends
     if (report.latestMeasurements) {
-      const m = report.latestMeasurements;
-      html += '<h2>Latest Body Measurements</h2>';
-      html += '<table><tr><th>Date</th><th>Waist</th><th>Hips</th><th>Chest</th><th>Neck</th></tr>';
-      html += '<tr><td>' + m.date + '</td><td>' + (m.waist || '--') + ' cm</td><td>' + (m.hips || '--') + ' cm</td><td>' + (m.chest || '--') + ' cm</td><td>' + (m.neck || '--') + ' cm</td></tr></table>';
+      var latest = report.latestMeasurements;
+      var earliest = report.earliestMeasurements;
+      var showChange = earliest && earliest.date !== latest.date;
+      html += '<h2>Body Measurements</h2>';
+      html += '<table><tr><th>Metric</th>';
+      if (showChange) html += '<th>' + earliest.date + '</th>';
+      html += '<th>' + latest.date + '</th>';
+      if (showChange) html += '<th>Change</th>';
+      html += '</tr>';
+      ['waist', 'hips', 'chest', 'neck'].forEach(function(key) {
+        var label = key.charAt(0).toUpperCase() + key.slice(1);
+        var latestVal = latest[key] ? parseFloat(latest[key]) : null;
+        var earliestVal = earliest && earliest[key] ? parseFloat(earliest[key]) : null;
+        html += '<tr><td>' + label + ' (cm)</td>';
+        if (showChange) html += '<td>' + (earliestVal !== null ? earliestVal : '--') + '</td>';
+        html += '<td>' + (latestVal !== null ? latestVal : '--') + '</td>';
+        if (showChange) {
+          if (latestVal !== null && earliestVal !== null) {
+            var diff = Math.round((latestVal - earliestVal) * 10) / 10;
+            var cls = diff < 0 ? 'change-pos' : (diff > 0 ? 'change-neg' : '');
+            html += '<td class="' + cls + '">' + formatChange(diff) + '</td>';
+          } else {
+            html += '<td>--</td>';
+          }
+        }
+        html += '</tr>';
+      });
+      html += '</table>';
+    }
+
+    // Exercise summary
+    if (report.exerciseStats && report.exerciseStats.sessions > 0) {
+      html += '<h2>Exercise Summary (Last 90 Days)</h2>';
+      html += '<div class="stats-grid">';
+      html += '<div class="stat-box"><div class="stat-value">' + report.exerciseStats.sessions + '</div><div class="stat-label">Sessions</div></div>';
+      html += '<div class="stat-box"><div class="stat-value">' + report.exerciseStats.totalMinutes + '</div><div class="stat-label">Total Minutes</div></div>';
+      html += '<div class="stat-box"><div class="stat-value">' + (report.exerciseStats.weeklyAvg || '--') + '</div><div class="stat-label">Sessions/Week</div></div>';
+      html += '</div>';
+      if (report.exerciseStats.mostCommon) {
+        html += '<p style="font-size:13px;color:#64748b;margin:4px 0;">Most common activity: <strong>' + report.exerciseStats.mostCommon + '</strong></p>';
+      }
+    }
+
+    // Wellbeing / Mood & Energy
+    if (report.wellbeing && report.wellbeing.entries > 0) {
+      html += '<h2>Wellbeing (Last 90 Days)</h2>';
+      html += '<div class="stats-grid">';
+      html += '<div class="stat-box"><div class="stat-value">' + (report.wellbeing.moodAvg !== null ? report.wellbeing.moodAvg + '/5' : '--') + '</div><div class="stat-label">Avg Mood</div></div>';
+      html += '<div class="stat-box"><div class="stat-value">' + (report.wellbeing.energyAvg !== null ? report.wellbeing.energyAvg + '/5' : '--') + '</div><div class="stat-label">Avg Energy</div></div>';
+      html += '<div class="stat-box"><div class="stat-value">' + report.wellbeing.entries + '</div><div class="stat-label">Journal Entries</div></div>';
+      html += '</div>';
     }
 
     html += '<div class="footer">Generated by Jab It Weight Tracker | ' + report.reportDate + '</div>';
     html += '</body></html>';
 
-    const reportWindow = window.open('', '_blank');
+    var reportWindow = window.open('', '_blank');
     if (reportWindow) {
       reportWindow.document.write(html);
       reportWindow.document.close();
