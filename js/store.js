@@ -935,6 +935,7 @@ const Store = (() => {
       lastJabDate: lastJab ? lastJab.date : null,
       lastJabTime: lastJab ? lastJab.time : null,
       nextJabDate,
+      nextJabTime: lastJab ? lastJab.time : null,
       daysOnPlan,
       targetWeight,
       weightToGo,
