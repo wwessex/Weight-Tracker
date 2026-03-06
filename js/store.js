@@ -725,7 +725,7 @@ const Store = (() => {
     // Streak: consecutive weeks with weight entries
     let streak = 0;
     const weekMs = 7 * 24 * 60 * 60 * 1000;
-    let checkDate = new Date();
+    let checkDate = new Date(now);
     for (let i = 0; i < 52; i++) {
       const weekStart = new Date(checkDate - weekMs);
       const hasEntry = weights.some(w => {
@@ -740,7 +740,7 @@ const Store = (() => {
 
     // Days on plan
     const startDate = parseLocalDate(profile.startDate || weights[0].date);
-    const daysOnPlan = startDate ? Math.floor((now - startDate) / (1000 * 60 * 60 * 24)) : 0;
+    const daysOnPlan = startDate ? Math.round((now - startDate) / (1000 * 60 * 60 * 24)) : 0;
 
     // Progress toward goal
     const targetWeight = goals.targetWeight ? parseFloat(goals.targetWeight) : null;
@@ -802,7 +802,7 @@ const Store = (() => {
     // Weight streak: consecutive weeks with a weigh-in
     let weightStreak = 0;
     const weekMs = 7 * 24 * 60 * 60 * 1000;
-    let checkDate = new Date();
+    let checkDate = parseLocalDate(new Date());
     for (let i = 0; i < 52; i++) {
       const weekStart = new Date(checkDate - weekMs);
       const hasEntry = weights.some(w => {
@@ -854,7 +854,7 @@ const Store = (() => {
     const pctLost = stats.startWeight > 0 ? (totalLostKg / stats.startWeight) * 100 : 0;
 
     // First 5 lbs / 2.3 kg / 0.36 st
-    const first5Threshold = unit === 'lbs' ? 5 : (unit === 'st' ? 0.36 : 2.3);
+    const first5Threshold = unit === 'lbs' ? 5 : (unit === 'st' ? 0.5 : 2);
     if (lostInUnit >= first5Threshold) {
       milestones.push({ key: 'first5', label: unit === 'lbs' ? 'First 5 lbs lost!' : (unit === 'st' ? 'First 0.5 st lost!' : 'First 2 kg lost!'), icon: '5' });
     }
