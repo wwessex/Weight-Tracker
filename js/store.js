@@ -64,6 +64,8 @@ const Store = (() => {
       doseReminderEnabled: false,
       weighInReminderEnabled: false,
       onboardingComplete: false,
+      firstRunChecklistComplete: false,
+      firstRunChecklistDismissed: false,
       lastReminderCheckAt: null,
     },
     goals: {
