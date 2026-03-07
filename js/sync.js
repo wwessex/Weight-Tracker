@@ -448,6 +448,14 @@ const Sync = (() => {
           // reminder toggles) are preserved instead of being cleared.
           var local = STORE_MAP[table].get();
           var merged = local ? Object.assign({}, local, remote) : remote;
+          // Preserve non-empty local values that remote would clear
+          if (local) {
+            Object.keys(local).forEach(function (key) {
+              if (local[key] && !remote[key]) {
+                merged[key] = local[key];
+              }
+            });
+          }
           STORE_MAP[table].save(merged);
         }
       });
