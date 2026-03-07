@@ -1743,6 +1743,22 @@ a { color: var(--primary); text-decoration: none; }
   color: rgba(255, 255, 255, 0.8);
 }
 
+.ob-progress-indicator {
+  display: inline-flex;
+  align-items: center;
+  margin: 2px 0 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.95) !important;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+
 /* --- Onboarding Multi-Screen --- */
 #ob-screen-chooser,
 #ob-screen-form,
