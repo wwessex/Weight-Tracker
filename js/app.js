@@ -16,6 +16,7 @@ const App = (() => {
   let pendingSummaryBannerMessage = '';
   const REMINDER_CHECK_INTERVAL_MS = 30 * 60 * 1000;
   const REMINDER_CATCH_UP_INTERVAL_MS = 2 * 60 * 60 * 1000;
+  const DOSAGE_DRAFT_KEY = 'shotsy_dosage_draft';
 
   // ===== UTILITIES =====
   function escapeHtml(str) {
@@ -44,6 +45,31 @@ const App = (() => {
     button.removeAttribute('aria-busy');
     if (button.dataset.defaultLabel) {
       button.textContent = button.dataset.defaultLabel;
+    }
+  }
+
+  function getDosageDraft() {
+    try {
+      const value = localStorage.getItem(DOSAGE_DRAFT_KEY);
+      return value === null ? '' : value;
+    } catch {
+      return '';
+    }
+  }
+
+  function setDosageDraft(value) {
+    try {
+      localStorage.setItem(DOSAGE_DRAFT_KEY, value || '');
+    } catch {
+      // Best effort only.
+    }
+  }
+
+  function clearDosageDraft() {
+    try {
+      localStorage.removeItem(DOSAGE_DRAFT_KEY);
+    } catch {
+      // Best effort only.
     }
   }
 
@@ -3261,6 +3287,7 @@ const App = (() => {
     const setDosageInput = document.getElementById('set-dosage');
     if (setDosageInput) {
       const persistDosageDraft = () => {
+        setDosageDraft(setDosageInput.value);
         const profile = Store.getProfile();
         profile.dosage = setDosageInput.value;
         Store.saveProfile(profile);
@@ -3544,6 +3571,7 @@ const App = (() => {
     profile.dosage = document.getElementById('set-dosage').value;
     profile.frequency = document.getElementById('set-frequency').value;
     Store.saveProfile(profile);
+    clearDosageDraft();
 
     const goals = Store.getGoals();
     goals.targetWeight = document.getElementById('set-goal-weight').value;
@@ -3596,7 +3624,8 @@ const App = (() => {
     document.getElementById('set-goal-weight').value = goals.targetWeight || '';
     document.getElementById('set-weight-unit').value = settings.weightUnit || 'kg';
     document.getElementById('set-medication').value = profile.medication || 'semaglutide';
-    document.getElementById('set-dosage').value = profile.dosage || '';
+    const dosageDraft = getDosageDraft();
+    document.getElementById('set-dosage').value = dosageDraft || profile.dosage || '';
     document.getElementById('set-frequency').value = profile.frequency || 'weekly';
     document.getElementById('set-theme').value = settings.theme || 'light';
     document.getElementById('set-weigh-schedule').value = settings.weighInSchedule || 'weekly';
