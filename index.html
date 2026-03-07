@@ -448,10 +448,10 @@
   <!-- Onboarding Tour Overlay -->
   <div id="tour-overlay" class="tour-overlay" style="display:none;">
     <div class="tour-tooltip" id="tour-tooltip">
-      <div class="tour-step-label" id="tour-step-label">Step 1 of 5</div>
+      <div class="tour-step-label" id="tour-step-label">Step 1 of 3</div>
       <p class="tour-text" id="tour-text"></p>
       <div class="tour-actions">
-        <button class="btn btn-ghost btn-sm" id="tour-skip">Skip Tour</button>
+        <button class="btn btn-ghost btn-sm" id="tour-skip">Close</button>
         <button class="btn btn-primary btn-sm" id="tour-next">Next</button>
       </div>
     </div>
@@ -544,6 +544,31 @@
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z"/><path d="M12 7v5l3 3"/></svg>
           <span>Log Weight</span>
         </button>
+      </div>
+
+      <div class="first-run-checklist-card" id="first-run-checklist-card" style="display:none;">
+        <div class="first-run-checklist-header">
+          <div>
+            <h3 class="section-title">Getting Started</h3>
+            <p class="first-run-checklist-progress" id="first-run-checklist-progress">0 of 3 complete</p>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="first-run-checklist-dismiss" type="button">Dismiss</button>
+        </div>
+        <div class="first-run-checklist-items">
+          <div class="first-run-checklist-item" data-checklist-item="profile" role="checkbox" aria-checked="false">
+            <span class="first-run-checklist-item-icon" aria-hidden="true">○</span>
+            <span>Confirm profile</span>
+          </div>
+          <div class="first-run-checklist-item" data-checklist-item="dose" role="checkbox" aria-checked="false">
+            <span class="first-run-checklist-item-icon" aria-hidden="true">○</span>
+            <span>Log first dose</span>
+          </div>
+          <div class="first-run-checklist-item" data-checklist-item="weight" role="checkbox" aria-checked="false">
+            <span class="first-run-checklist-item-icon" aria-hidden="true">○</span>
+            <span>Log today’s weight</span>
+          </div>
+        </div>
+        <a href="#" id="first-run-quick-tour-link" class="see-all-link">Take a quick tour</a>
       </div>
 
       <!-- Missed Dose Banner -->

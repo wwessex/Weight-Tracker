@@ -1886,6 +1886,59 @@ a { color: var(--primary); text-decoration: none; }
   gap: 8px;
 }
 
+/* --- First-run Checklist --- */
+.first-run-checklist-card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.first-run-checklist-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.first-run-checklist-header .section-title {
+  margin-bottom: 4px;
+}
+
+.first-run-checklist-progress {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.first-run-checklist-items {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.first-run-checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+.first-run-checklist-item-icon {
+  width: 18px;
+  text-align: center;
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.first-run-checklist-item.done {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
 /* --- Toast --- */
 .toast-container {
   position: fixed;

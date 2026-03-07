@@ -306,11 +306,7 @@ const App = (() => {
     applyTheme();
     renderAllPages();
     handleHashChange();
-    // Show tour if first time
-    const settings = Store.getSettings();
-    if (!settings.onboardingComplete) {
-      setTimeout(startTour, 800);
-    }
+    refreshFirstRunChecklist();
     // Schedule reminder checks
     checkReminders({ source: 'app-load', isCatchUp: true });
     scheduleReminderChecks();
@@ -770,29 +766,101 @@ const App = (() => {
     });
   }
 
-  // ===== ONBOARDING TOUR =====
+  // ===== FIRST-RUN CHECKLIST / TOUR =====
+  function getFirstRunChecklistState() {
+    const profile = Store.getProfile() || {};
+    const weights = Store.getWeights();
+    const doses = Store.getJabs();
+    const settings = Store.getSettings();
+
+    const hasProfile = !!(profile.name && String(profile.name).trim());
+    const hasDose = Array.isArray(doses) && doses.length > 0;
+    const hasWeight = Array.isArray(weights) && weights.length > 0;
+
+    const items = [
+      { key: 'profile', label: 'Confirm profile', done: hasProfile },
+      { key: 'dose', label: 'Log first dose', done: hasDose },
+      { key: 'weight', label: "Log today's weight", done: hasWeight },
+    ];
+
+    const completedCount = items.filter(item => item.done).length;
+    const allDone = completedCount === items.length;
+
+    return {
+      settings,
+      items,
+      completedCount,
+      allDone,
+      shouldShow: !settings.firstRunChecklistComplete && !settings.firstRunChecklistDismissed,
+    };
+  }
+
+  function saveFirstRunChecklistState(patch) {
+    const settings = Store.getSettings();
+    Store.saveSettings(Object.assign({}, settings, patch));
+  }
+
+  function updateChecklistItemElement(itemEl, isDone) {
+    if (!itemEl) return;
+    itemEl.classList.toggle('done', !!isDone);
+    itemEl.setAttribute('aria-checked', isDone ? 'true' : 'false');
+    const icon = itemEl.querySelector('.first-run-checklist-item-icon');
+    if (icon) icon.textContent = isDone ? '✓' : '○';
+  }
+
+  function refreshFirstRunChecklist() {
+    const card = document.getElementById('first-run-checklist-card');
+    if (!card) return;
+
+    const state = getFirstRunChecklistState();
+    const completedText = document.getElementById('first-run-checklist-progress');
+
+    state.items.forEach((item) => {
+      updateChecklistItemElement(document.querySelector('[data-checklist-item="' + item.key + '"]'), item.done);
+    });
+
+    if (completedText) {
+      completedText.textContent = state.completedCount + ' of ' + state.items.length + ' complete';
+    }
+
+    if (state.allDone && !state.settings.firstRunChecklistComplete) {
+      saveFirstRunChecklistState({
+        firstRunChecklistComplete: true,
+        firstRunChecklistDismissed: true,
+        onboardingComplete: true,
+      });
+    }
+
+    card.style.display = state.shouldShow && !state.allDone ? '' : 'none';
+  }
+
+  function dismissFirstRunChecklist() {
+    saveFirstRunChecklistState({ firstRunChecklistDismissed: true });
+    refreshFirstRunChecklist();
+  }
+
   function startTour() {
     const steps = [
-      { text: 'Welcome to Jab It! This is your Summary dashboard. It shows your key stats, streaks, and upcoming doses at a glance.' },
-      { text: 'Use these quick action buttons to log a medication dose or record your weight in seconds.' },
-      { text: 'Your stats grid shows weight lost, BMI, progress toward your goal, and more. Cards update in real-time.' },
-      { text: 'Navigate between Summary, Doses, Progress, and Settings using the bottom tabs.' },
-      { text: "You're all set! Head to Settings to customise reminders, themes, and export options. Good luck on your journey!" },
+      { text: 'Summary gives you a quick snapshot of progress, upcoming doses, and trends.' },
+      { text: 'Use Log Dose and Log Weight buttons to quickly keep your data up to date.' },
+      { text: 'Use the bottom tabs to open Doses, Progress, Journal, and Settings any time.' },
     ];
+
     let step = 0;
     const overlay = document.getElementById('tour-overlay');
-    const tooltip = document.getElementById('tour-tooltip');
     const text = document.getElementById('tour-text');
     const label = document.getElementById('tour-step-label');
     const nextBtn = document.getElementById('tour-next');
     const skipBtn = document.getElementById('tour-skip');
 
+    function finishTour() {
+      overlay.style.display = 'none';
+      saveFirstRunChecklistState({ onboardingComplete: true });
+    }
+
     function show() {
       if (step >= steps.length) {
-        overlay.style.display = 'none';
-        const settings = Store.getSettings();
-        settings.onboardingComplete = true;
-        Store.saveSettings(settings);
+        finishTour();
         return;
       }
       label.textContent = 'Step ' + (step + 1) + ' of ' + steps.length;
@@ -802,12 +870,7 @@ const App = (() => {
     }
 
     nextBtn.onclick = () => { step++; show(); };
-    skipBtn.onclick = () => {
-      overlay.style.display = 'none';
-      const settings = Store.getSettings();
-      settings.onboardingComplete = true;
-      Store.saveSettings(settings);
-    };
+    skipBtn.onclick = finishTour;
     show();
   }
 
@@ -1775,6 +1838,19 @@ const App = (() => {
     document.getElementById('btn-quick-dose').addEventListener('click', () => openDoseModal());
     document.getElementById('btn-quick-weight').addEventListener('click', () => openWeightModal());
 
+    const checklistDismiss = document.getElementById('first-run-checklist-dismiss');
+    if (checklistDismiss) {
+      checklistDismiss.addEventListener('click', () => dismissFirstRunChecklist());
+    }
+
+    const quickTourLink = document.getElementById('first-run-quick-tour-link');
+    if (quickTourLink) {
+      quickTourLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        startTour();
+      });
+    }
+
     // Missed dose actions
     document.getElementById('btn-log-overdue').addEventListener('click', () => openDoseModal());
     document.getElementById('btn-log-missed').addEventListener('click', () => {
@@ -1867,6 +1943,8 @@ const App = (() => {
 
     // Weight trend chart
     renderWeightSummaryChart();
+
+    refreshFirstRunChecklist();
   }
 
   function renderPeriodSummary(stats) {
