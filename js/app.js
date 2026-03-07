@@ -685,6 +685,7 @@ const App = (() => {
   // Reuse Store's date parsing utilities (single source of truth)
   const parseLocalDate = Store.parseLocalDate;
   const formatLocalDate = Store.formatLocalDate;
+  const parseTimeParts = Store.parseTimeParts;
 
   function toLocalDayNumber(value) {
     const date = parseLocalDate(value);
@@ -1696,8 +1697,12 @@ const App = (() => {
       const target = new Date(targetDate);
       // Use the exact time from the last dose so countdown is to the same time of day
       if (stats.nextJabTime) {
-        const timeParts = stats.nextJabTime.split(':');
-        target.setHours(parseInt(timeParts[0], 10) || 0, parseInt(timeParts[1], 10) || 0, 0, 0);
+        const parsedTime = parseTimeParts(stats.nextJabTime);
+        if (parsedTime) {
+          target.setHours(parsedTime.hours, parsedTime.minutes, 0, 0);
+        } else {
+          target.setHours(9, 0, 0, 0);
+        }
       } else {
         // No time recorded — default to 9 AM as a reasonable dose time
         target.setHours(9, 0, 0, 0);
@@ -1743,8 +1748,12 @@ const App = (() => {
     let progress = 0;
     if (targetForRing) {
       if (stats.nextJabTime) {
-        const tp = stats.nextJabTime.split(':');
-        targetForRing.setHours(parseInt(tp[0], 10) || 0, parseInt(tp[1], 10) || 0, 0, 0);
+        const parsedTime = parseTimeParts(stats.nextJabTime);
+        if (parsedTime) {
+          targetForRing.setHours(parsedTime.hours, parsedTime.minutes, 0, 0);
+        } else {
+          targetForRing.setHours(9, 0, 0, 0);
+        }
       } else {
         targetForRing.setHours(9, 0, 0, 0);
       }

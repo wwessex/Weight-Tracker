@@ -112,6 +112,34 @@ const Store = (() => {
     return `${y}-${m}-${d}`;
   }
 
+  function parseTimeParts(value) {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    // Accept HH:mm, HH:mm:ss, h.mmam/pm and h:mm am/pm variants from legacy imports.
+    const timeMatch = trimmed.match(/^(\d{1,2})[:.](\d{2})(?::\d{2})?\s*([ap]m)?$/i);
+    if (!timeMatch) return null;
+
+    let hours = parseInt(timeMatch[1], 10);
+    const minutes = parseInt(timeMatch[2], 10);
+    const meridiem = timeMatch[3] ? timeMatch[3].toLowerCase() : '';
+
+    if (Number.isNaN(hours) || Number.isNaN(minutes) || minutes < 0 || minutes > 59) return null;
+    if (meridiem) {
+      if (hours < 1 || hours > 12) return null;
+      if (meridiem === 'pm' && hours < 12) hours += 12;
+      if (meridiem === 'am' && hours === 12) hours = 0;
+    }
+    if (hours < 0 || hours > 23) return null;
+
+    return {
+      hours,
+      minutes,
+      normalized: String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0'),
+    };
+  }
+
   function warnInvalidDate(context, dateValue) {
     console.warn(`[Store] Skipping ${context} with invalid date:`, dateValue);
   }
@@ -937,8 +965,11 @@ const Store = (() => {
         // Apply the dose time to calculate the exact next dose datetime
         var nextTarget = new Date(lastJabD);
         if (lastJabTimeForNext) {
-          var tp = lastJabTimeForNext.split(':');
-          nextTarget.setHours(parseInt(tp[0], 10) || 0, parseInt(tp[1], 10) || 0, 0, 0);
+          var parsedTime = parseTimeParts(lastJabTimeForNext);
+          if (parsedTime) {
+            nextTarget.setHours(parsedTime.hours, parsedTime.minutes, 0, 0);
+            lastJabTimeForNext = parsedTime.normalized;
+          }
         }
         nextTarget.setDate(nextTarget.getDate() + days);
         nextJabDate = formatLocalDate(nextTarget);
@@ -1928,7 +1959,7 @@ const Store = (() => {
     getBackupSizeInfo,
     generateBackupLink, generateMetadataBackupLink, importFromBackupLink,
     SAFE_BACKUP_LINK_CHARS,
-    parseLocalDate, formatLocalDate,
+    parseLocalDate, formatLocalDate, parseTimeParts,
     clearAll,
   };
 })();
