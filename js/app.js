@@ -338,6 +338,24 @@ const App = (() => {
     var screenSignin = document.getElementById('ob-screen-signin');
     var restorePanel = document.getElementById('ob-restore-options');
     var btnReturningUser = document.getElementById('btn-ob-returning-user');
+    var progressChooser = document.getElementById('ob-progress-chooser');
+    var progressForm = document.getElementById('ob-progress-form');
+    var progressSignin = document.getElementById('ob-progress-signin');
+    var activeObFlow = 'new';
+
+    function getProgressText(screen) {
+      if (screen === screenChooser) return 'Step 1 of 2 · Choose setup path';
+      if (activeObFlow === 'returning') return 'Step 2 of 2 · Returning user restore';
+      if (screen === screenForm) return 'Step 2 of 2 · New user setup';
+      return 'Step 1 of 2 · New user setup';
+    }
+
+    function updateOnboardingProgress(screen) {
+      var progressText = getProgressText(screen);
+      [progressChooser, progressForm, progressSignin].forEach(function (el) {
+        if (el) el.textContent = progressText;
+      });
+    }
 
     function setRestorePanelOpen(isOpen) {
       if (!restorePanel || !btnReturningUser) return;
@@ -353,11 +371,13 @@ const App = (() => {
       screenSignin.style.display = 'none';
       screen.style.display = '';
       if (screen === screenChooser) setRestorePanelOpen(false);
+      updateOnboardingProgress(screen);
       screen.closest('.modal').scrollTop = 0;
     }
 
     // "Get Started" → new user form
     document.getElementById('btn-ob-new-user').addEventListener('click', function () {
+      activeObFlow = 'new';
       showObScreen(screenForm);
     });
 
@@ -365,6 +385,12 @@ const App = (() => {
     if (btnReturningUser) {
       btnReturningUser.addEventListener('click', function () {
         var isOpen = btnReturningUser.getAttribute('aria-expanded') === 'true';
+        if (isOpen) {
+          activeObFlow = 'new';
+        } else {
+          activeObFlow = 'returning';
+        }
+        showObScreen(screenChooser);
         setRestorePanelOpen(!isOpen);
       });
     }
@@ -374,6 +400,7 @@ const App = (() => {
     if (typeof Auth !== 'undefined' && Auth.isConfigured()) {
       btnSignIn.style.display = '';
       btnSignIn.addEventListener('click', function () {
+        activeObFlow = 'returning';
         // Reset sign-in form state when navigating to it
         var obSigninForm = document.getElementById('ob-signin-form');
         var obSigninSent = document.getElementById('ob-signin-sent');
@@ -387,9 +414,11 @@ const App = (() => {
 
     // Back buttons
     document.getElementById('btn-ob-back-form').addEventListener('click', function () {
+      activeObFlow = 'new';
       showObScreen(screenChooser);
     });
     document.getElementById('btn-ob-back-signin').addEventListener('click', function () {
+      activeObFlow = 'returning';
       showObScreen(screenChooser);
     });
 
@@ -402,6 +431,8 @@ const App = (() => {
       e.preventDefault();
       obImportFile.click();
     });
+
+    updateOnboardingProgress(screenChooser);
 
     // --- Existing onboarding form logic ---
     var onboardingForm = document.getElementById('onboarding-form');
