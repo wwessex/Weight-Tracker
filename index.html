@@ -291,6 +291,7 @@
           <p class="ob-progress-indicator" id="ob-progress-chooser" aria-live="polite">Step 1 of 2 · New user setup</p>
           <h2 id="ob-title-chooser" tabindex="-1">Choose how you want to continue</h2>
           <p>Pick a setup option to get into your tracker in under 1 minute.</p>
+          <p class="form-help" style="margin-top:8px;">Privacy first: your tracker stays local on this device. Cloud sync only starts after you sign in.</p>
         </div>
         <div class="modal-body ob-chooser-body">
           <button type="button" class="btn btn-primary btn-block" id="btn-ob-new-user">Get started</button>
@@ -301,6 +302,7 @@
             <p class="form-help ob-restore-options-title">Restore options</p>
             <button type="button" class="btn btn-outline btn-block" id="btn-ob-sign-in" style="display:none;">Sign in to sync</button>
             <button type="button" class="btn btn-outline btn-block" id="btn-ob-restore-link">Restore backup file</button>
+            <p class="form-help ob-chooser-help">Supports <strong>.json</strong> and <strong>.json.gz</strong> encrypted backups. Keep your file and passphrase separate.</p>
             <p class="form-help ob-chooser-help">Returning users: <strong>Restores your previous data</strong></p>
           </div>
           <input type="file" id="ob-import-file" accept=".json,.gz" style="display:none;" aria-hidden="true">
@@ -415,6 +417,7 @@
           <p class="ob-progress-indicator" id="ob-progress-signin" aria-live="polite">Step 2 of 2 · Returning user restore</p>
           <h2 id="ob-title-signin" tabindex="-1">Sign in to restore your tracker</h2>
           <p>Use your email to sync your data and resume in under 1 minute.</p>
+          <p class="form-help" style="margin-top:8px;">Your local data stays on-device. Cloud sync runs only while signed in.</p>
         </div>
         <div class="modal-body">
           <form id="ob-signin-form">
@@ -435,6 +438,7 @@
           </div>
           <div class="ob-divider"><span>or</span></div>
           <p class="form-help" style="text-align:center;">Have a backup file instead? <a href="#" id="btn-ob-restore-link-signin">Restore backup file</a></p>
+          <p class="form-help" style="text-align:center;">Supported files: <strong>.json</strong> or <strong>.json.gz</strong> encrypted backups. Keep your passphrase separate from the file.</p>
         </div>
       </section>
 
