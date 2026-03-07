@@ -444,7 +444,11 @@ const Sync = (() => {
     var singletonPromises = SINGLETON_TABLES.map(function (table) {
       return pullSingleton(table).then(function (remote) {
         if (remote) {
-          STORE_MAP[table].save(remote);
+          // Merge with local data so local-only fields (e.g. current dose,
+          // reminder toggles) are preserved instead of being cleared.
+          var local = STORE_MAP[table].get();
+          var merged = local ? Object.assign({}, local, remote) : remote;
+          STORE_MAP[table].save(merged);
         }
       });
     });
