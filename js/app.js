@@ -73,6 +73,10 @@ const App = (() => {
   function init() {
     var didShowApp = false;
     try {
+      // Hide SEO landing content once app JS is running
+      var landingEl = document.querySelector('.landing-content');
+      if (landingEl) landingEl.style.display = 'none';
+
       applyTheme();
       bindGlobalListeners();
       bindCriticalButtonFallbacks();
