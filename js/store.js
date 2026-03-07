@@ -120,7 +120,15 @@ const Store = (() => {
     const aDate = parseLocalDate(a.date);
     const bDate = parseLocalDate(b.date);
     if (!aDate || !bDate) return 0;
-    return aDate - bDate;
+    const dateDiff = aDate - bDate;
+    if (dateDiff !== 0) return dateDiff;
+    // Same date: sort by time if available (entries with time come after entries without)
+    const aTime = a.time || '';
+    const bTime = b.time || '';
+    if (!aTime && !bTime) return 0;
+    if (!aTime) return -1;
+    if (!bTime) return 1;
+    return aTime.localeCompare(bTime);
   }
 
   function withNormalizedLocalDates(records, context) {
@@ -907,6 +915,17 @@ const Store = (() => {
     // Next jab date
     let nextJabDate = null;
     const lastJab = jabs.length > 0 ? jabs[jabs.length - 1] : null;
+    // Find the time from the last jab that has a time recorded
+    // (missed doses may have empty time, so look back for a real time)
+    let lastJabTimeForNext = lastJab ? lastJab.time : null;
+    if (lastJab && !lastJabTimeForNext) {
+      for (let i = jabs.length - 2; i >= 0; i--) {
+        if (jabs[i] && jabs[i].time) {
+          lastJabTimeForNext = jabs[i].time;
+          break;
+        }
+      }
+    }
     if (lastJab) {
       const freq = profile.frequency || 'weekly';
       const freqDays = { daily: 1, weekly: 7, biweekly: 14, monthly: 30 };
@@ -915,9 +934,14 @@ const Store = (() => {
       if (!lastJabD) {
         warnInvalidDate('last dose entry', lastJab.date);
       } else {
-        nextJabDate = new Date(lastJabD);
-        nextJabDate.setDate(nextJabDate.getDate() + days);
-        nextJabDate = formatLocalDate(nextJabDate);
+        // Apply the dose time to calculate the exact next dose datetime
+        var nextTarget = new Date(lastJabD);
+        if (lastJabTimeForNext) {
+          var tp = lastJabTimeForNext.split(':');
+          nextTarget.setHours(parseInt(tp[0], 10) || 0, parseInt(tp[1], 10) || 0, 0, 0);
+        }
+        nextTarget.setDate(nextTarget.getDate() + days);
+        nextJabDate = formatLocalDate(nextTarget);
       }
     }
 
@@ -935,7 +959,7 @@ const Store = (() => {
       lastJabDate: lastJab ? lastJab.date : null,
       lastJabTime: lastJab ? lastJab.time : null,
       nextJabDate,
-      nextJabTime: lastJab ? lastJab.time : null,
+      nextJabTime: lastJabTimeForNext || null,
       daysOnPlan,
       targetWeight,
       weightToGo,
