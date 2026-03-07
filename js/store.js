@@ -864,6 +864,7 @@ const Store = (() => {
         lastJabDate: jabs.length > 0 ? jabs[jabs.length - 1].date : null,
         lastJabTime: jabs.length > 0 ? jabs[jabs.length - 1].time : null,
         nextJabDate: null,
+        nextJabDateTime: null,
         daysOnPlan: 0,
         targetWeight: goals.targetWeight || null,
         weightToGo: null,
@@ -942,6 +943,7 @@ const Store = (() => {
 
     // Next jab date
     let nextJabDate = null;
+    let nextJabDateTime = null;
     const lastJab = jabs.length > 0 ? jabs[jabs.length - 1] : null;
     // Find the time from the last jab that has a time recorded
     // (missed doses may have empty time, so look back for a real time)
@@ -973,6 +975,7 @@ const Store = (() => {
         }
         nextTarget.setDate(nextTarget.getDate() + days);
         nextJabDate = formatLocalDate(nextTarget);
+        nextJabDateTime = nextTarget.toISOString();
       }
     }
 
@@ -990,6 +993,7 @@ const Store = (() => {
       lastJabDate: lastJab ? lastJab.date : null,
       lastJabTime: lastJab ? lastJab.time : null,
       nextJabDate,
+      nextJabDateTime,
       nextJabTime: lastJabTimeForNext || null,
       daysOnPlan,
       targetWeight,

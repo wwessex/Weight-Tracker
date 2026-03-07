@@ -1271,6 +1271,45 @@ const App = (() => {
     return null;
   }
 
+  function resolveNextJabDateTime(stats, context) {
+    if (stats && stats.nextJabDateTime) {
+      const canonicalTarget = new Date(stats.nextJabDateTime);
+      if (!Number.isNaN(canonicalTarget.getTime())) return canonicalTarget;
+    }
+
+    // Legacy fallback for pre-nextJabDateTime stats payloads
+    if (stats && stats.nextJabDate) {
+      console.warn('[App][NextDoseDateTimeFallback] Falling back to nextJabDate/nextJabTime for ' + context + '.', {
+        nextJabDateTime: stats.nextJabDateTime,
+        nextJabDate: stats.nextJabDate,
+        nextJabTime: stats.nextJabTime,
+      });
+      const fallbackTarget = parseLocalDate(stats.nextJabDate);
+      if (!fallbackTarget) return null;
+      if (stats.nextJabTime) {
+        const parsedTime = parseTimeParts(stats.nextJabTime);
+        if (parsedTime) {
+          fallbackTarget.setHours(parsedTime.hours, parsedTime.minutes, 0, 0);
+        } else {
+          fallbackTarget.setHours(9, 0, 0, 0);
+        }
+      } else {
+        fallbackTarget.setHours(9, 0, 0, 0);
+      }
+      return fallbackTarget;
+    }
+
+    if (stats && (stats.nextJabDateTime || stats.nextJabDate)) {
+      console.warn('[App][NextDoseDateTimeFallback] Unable to resolve next dose datetime for ' + context + '.', {
+        nextJabDateTime: stats.nextJabDateTime,
+        nextJabDate: stats.nextJabDate,
+        nextJabTime: stats.nextJabTime,
+      });
+    }
+
+    return null;
+  }
+
   function getWeighInReminderWindowKey(daysSince, threshold) {
     const now = new Date();
     const windowStart = new Date(now);
@@ -1305,17 +1344,20 @@ const App = (() => {
     const stats = Store.getStats();
 
     // Check dose reminder
-    if (settings.doseReminderEnabled && stats.nextJabDate) {
-      const diff = dayDiff(new Date(), stats.nextJabDate);
-      if (diff === 0) {
-        const dedupKey = getDoseReminderWindowKey(diff);
-        if (shouldSendReminder('dose', dedupKey)) {
-          sendReminder('Jab It - Dose Reminder', 'Your dose is due today!', 'dose');
-        }
-      } else if (diff < 0) {
-        const dedupKey = getDoseReminderWindowKey(diff);
-        if (shouldSendReminder('dose', dedupKey)) {
-          sendReminder('Jab It - Dose Overdue', 'Your dose is ' + Math.abs(diff) + ' day(s) overdue.', 'dose');
+    if (settings.doseReminderEnabled) {
+      const nextDoseTarget = resolveNextJabDateTime(stats, 'dose reminder');
+      if (nextDoseTarget) {
+        const diff = dayDiff(new Date(), nextDoseTarget);
+        if (diff === 0) {
+          const dedupKey = getDoseReminderWindowKey(diff);
+          if (shouldSendReminder('dose', dedupKey)) {
+            sendReminder('Jab It - Dose Reminder', 'Your dose is due today!', 'dose');
+          }
+        } else if (diff < 0) {
+          const dedupKey = getDoseReminderWindowKey(diff);
+          if (shouldSendReminder('dose', dedupKey)) {
+            sendReminder('Jab It - Dose Overdue', 'Your dose is ' + Math.abs(diff) + ' day(s) overdue.', 'dose');
+          }
         }
       }
     }
@@ -1510,8 +1552,9 @@ const App = (() => {
 
     // Missed dose banner
     const banner = document.getElementById('missed-dose-banner');
-    if (stats.nextJabDate) {
-      const diff = dayDiff(new Date(), stats.nextJabDate);
+    const nextDoseTarget = resolveNextJabDateTime(stats, 'missed dose banner');
+    if (nextDoseTarget) {
+      const diff = dayDiff(new Date(), nextDoseTarget);
       if (diff < 0) {
         banner.style.display = '';
         document.getElementById('missed-dose-text').textContent = 'Dose overdue by ' + Math.abs(diff) + ' day(s)!';
@@ -1657,7 +1700,8 @@ const App = (() => {
       countdownInterval = null;
     }
 
-    if (!stats.nextJabDate) {
+    const target = resolveNextJabDateTime(stats, 'dose ring');
+    if (!target) {
       ringValue.textContent = '--';
       ringSub.textContent = '';
       ringInfo.textContent = 'No doses logged yet';
@@ -1689,24 +1733,6 @@ const App = (() => {
 
     function updateCountdown() {
       const now = new Date();
-      const targetDate = parseLocalDate(stats.nextJabDate);
-      if (!targetDate) {
-        console.warn('[App] Invalid next jab date for countdown:', stats.nextJabDate);
-        return;
-      }
-      const target = new Date(targetDate);
-      // Use the exact time from the last dose so countdown is to the same time of day
-      if (stats.nextJabTime) {
-        const parsedTime = parseTimeParts(stats.nextJabTime);
-        if (parsedTime) {
-          target.setHours(parsedTime.hours, parsedTime.minutes, 0, 0);
-        } else {
-          target.setHours(9, 0, 0, 0);
-        }
-      } else {
-        // No time recorded — default to 9 AM as a reasonable dose time
-        target.setHours(9, 0, 0, 0);
-      }
       const diffMs = target - now;
       const totalHours = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60)));
       const diffDays = Math.floor(totalHours / 24);
@@ -1737,31 +1763,18 @@ const App = (() => {
         ringSub.textContent = diffDays === 1 ? 'day' : 'days';
         ringInfo.textContent = 'until next dose';
         detail.style.display = 'block';
-        detail.textContent = diffDays + 'd ' + diffHours + 'h remaining \u00B7 ' + formatDate(stats.nextJabDate) + ' at ' + dueTimeStr;
+        detail.textContent = diffDays + 'd ' + diffHours + 'h remaining \u00B7 ' + formatDate(formatLocalDate(target)) + ' at ' + dueTimeStr;
       }
     }
     updateCountdown();
     countdownInterval = setInterval(updateCountdown, 60000);
 
-    // Calculate progress using exact time for accurate ring fill
-    const targetForRing = parseLocalDate(stats.nextJabDate);
+    // Calculate progress using exact canonical datetime for accurate ring fill
     let progress = 0;
-    if (targetForRing) {
-      if (stats.nextJabTime) {
-        const parsedTime = parseTimeParts(stats.nextJabTime);
-        if (parsedTime) {
-          targetForRing.setHours(parsedTime.hours, parsedTime.minutes, 0, 0);
-        } else {
-          targetForRing.setHours(9, 0, 0, 0);
-        }
-      } else {
-        targetForRing.setHours(9, 0, 0, 0);
-      }
-      const cycleDuration = cycleDays * 24 * 60 * 60 * 1000;
-      const remaining = targetForRing - new Date();
-      const elapsed = cycleDuration - Math.max(0, remaining);
-      progress = Math.max(0, Math.min(1, elapsed / cycleDuration));
-    }
+    const cycleDuration = cycleDays * 24 * 60 * 60 * 1000;
+    const remaining = target - new Date();
+    const elapsed = cycleDuration - Math.max(0, remaining);
+    progress = Math.max(0, Math.min(1, elapsed / cycleDuration));
 
     doseRingChart = new Chart(ctx, {
       type: 'doughnut',
