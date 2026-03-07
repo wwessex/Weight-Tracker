@@ -1,0 +1,24 @@
+name: Release Metadata Check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-metadata:
+    runs-on: ubuntu-latest
+    env:
+      SITE_BASE_URL: https://wwessex.github.io/Weight-Tracker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate robots, sitemap, canonical consistency
+        run: |
+          python3 scripts/release_check.py \
+            --base-url "$SITE_BASE_URL"
