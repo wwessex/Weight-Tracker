@@ -252,6 +252,8 @@ const App = (() => {
         startWeight: document.getElementById('ob-weight').value,
         startDate: new Date().toISOString().split('T')[0],
         medication: document.getElementById('ob-medication').value,
+        dosage: '',
+        frequency: 'weekly',
         age: '',
       };
       Store.saveProfile(profile);
@@ -648,6 +650,8 @@ const App = (() => {
         startWeight: obWeightInput.value,
         startDate: formatLocalDate(new Date()),
         medication: document.getElementById('ob-medication').value,
+        dosage: '',
+        frequency: 'weekly',
         age: '',
       };
       Store.saveProfile(profile);
@@ -2301,10 +2305,10 @@ const App = (() => {
       }
       // Sync profile dosage/medication with the latest dose entry
       const prof = Store.getProfile();
-      if (entry.dose && entry.dose !== prof.dosage) {
-        prof.dosage = entry.dose;
+      if (entry.dose) {
+        prof.dosage = String(entry.dose);
       }
-      if (entry.medication && entry.medication !== prof.medication) {
+      if (entry.medication) {
         prof.medication = entry.medication;
       }
       Store.saveProfile(prof);
