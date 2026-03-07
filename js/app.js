@@ -209,10 +209,20 @@ const App = (() => {
       var name = (document.getElementById('ob-name').value || '').trim();
       if (!name) return;
 
+      var obHeightUnit = document.getElementById('ob-height-unit').value;
+      var normalizedHeightCm = parseFloat(document.getElementById('ob-height').value);
+      if (obHeightUnit === 'ft') {
+        var ft = parseFloat(document.getElementById('ob-height-ft').value || '');
+        var inches = parseFloat(document.getElementById('ob-height-in').value || '');
+        if (Number.isFinite(ft) && Number.isFinite(inches)) {
+          normalizedHeightCm = ((ft * 12) + inches) * 2.54;
+        }
+      }
+
       var profile = {
         name: name,
-        height: document.getElementById('ob-height').value,
-        heightUnit: document.getElementById('ob-height-unit').value,
+        height: Number.isFinite(normalizedHeightCm) ? normalizedHeightCm.toFixed(1) : '',
+        heightUnit: 'cm',
         startWeight: document.getElementById('ob-weight').value,
         startDate: new Date().toISOString().split('T')[0],
         medication: document.getElementById('ob-medication').value,
@@ -394,30 +404,134 @@ const App = (() => {
     });
 
     // --- Existing onboarding form logic ---
+    var onboardingForm = document.getElementById('onboarding-form');
+    var obHeightInput = document.getElementById('ob-height');
+    var obHeightUnit = document.getElementById('ob-height-unit');
+    var obHeightCmGroup = document.getElementById('ob-height-cm-group');
+    var obHeightImperialGroup = document.getElementById('ob-height-imperial-group');
+    var obHeightFtInput = document.getElementById('ob-height-ft');
+    var obHeightInInput = document.getElementById('ob-height-in');
+    var obHeightValidation = document.getElementById('ob-height-validation');
+    var obWeightInput = document.getElementById('ob-weight');
+    var obTargetInput = document.getElementById('ob-target');
+    var obTargetValidation = document.getElementById('ob-target-validation');
+    var obWeightWarning = document.getElementById('ob-weight-warning');
     var obWeightUnit = document.getElementById('ob-weight-unit');
-    obWeightUnit.addEventListener('change', function () {
+
+    function setInlineMessage(element, message) {
+      if (!element) return;
+      element.textContent = message || '';
+      element.style.display = message ? '' : 'none';
+    }
+
+    function updateWeightUnitUi() {
       document.querySelectorAll('.ob-weight-unit-label').forEach(function (el) { el.textContent = obWeightUnit.value; });
+      var unitLimits = {
+        kg: { min: 0.1, max: 500 },
+        lbs: { min: 0.1, max: 1100 },
+        st: { min: 0.1, max: 80 }
+      };
+      var limits = unitLimits[obWeightUnit.value] || unitLimits.kg;
+      obWeightInput.min = String(limits.min);
+      obWeightInput.max = String(limits.max);
+      obTargetInput.min = '0';
+      obTargetInput.max = String(limits.max);
+    }
+
+    function updateHeightUnitUi() {
+      var isImperial = obHeightUnit.value === 'ft';
+      obHeightCmGroup.style.display = isImperial ? 'none' : '';
+      obHeightImperialGroup.style.display = isImperial ? '' : 'none';
+      obHeightInput.required = !isImperial;
+      obHeightFtInput.required = isImperial;
+      obHeightInInput.required = isImperial;
+      if (!isImperial) {
+        obHeightFtInput.value = '';
+        obHeightInInput.value = '';
+      }
+      setInlineMessage(obHeightValidation, '');
+    }
+
+    function getNormalizedHeightCm() {
+      if (obHeightUnit.value === 'ft') {
+        var feetRaw = (obHeightFtInput.value || '').trim();
+        var inchesRaw = (obHeightInInput.value || '').trim();
+        if (!feetRaw || !inchesRaw) {
+          return { error: 'Please enter both feet and inches for your height.' };
+        }
+        var feet = parseFloat(feetRaw);
+        var inches = parseFloat(inchesRaw);
+        if (!Number.isFinite(feet) || !Number.isFinite(inches)) {
+          return { error: 'Height must be a valid number.' };
+        }
+        var cm = ((feet * 12) + inches) * 2.54;
+        if (cm < 100 || cm > 250) {
+          return { error: 'Height must be between 100 cm and 250 cm.' };
+        }
+        return { value: cm.toFixed(1) };
+      }
+
+      var cmHeight = parseFloat(obHeightInput.value);
+      if (!Number.isFinite(cmHeight) || cmHeight < 100 || cmHeight > 250) {
+        return { error: 'Height must be between 100 cm and 250 cm.' };
+      }
+      return { value: cmHeight.toFixed(1) };
+    }
+
+    obWeightUnit.addEventListener('change', function () {
+      updateWeightUnitUi();
+      setInlineMessage(obTargetValidation, '');
+      setInlineMessage(obWeightWarning, '');
     });
 
-    document.getElementById('onboarding-form').addEventListener('submit', function (e) {
+    obHeightUnit.addEventListener('change', function () {
+      updateHeightUnitUi();
+    });
+
+    updateWeightUnitUi();
+    updateHeightUnitUi();
+
+    onboardingForm.addEventListener('submit', function (e) {
       e.preventDefault();
+
+      setInlineMessage(obHeightValidation, '');
+      setInlineMessage(obTargetValidation, '');
+      setInlineMessage(obWeightWarning, '');
+
+      var normalizedHeight = getNormalizedHeightCm();
+      if (normalizedHeight.error) {
+        setInlineMessage(obHeightValidation, normalizedHeight.error);
+        return;
+      }
+
+      var startWeight = parseFloat(obWeightInput.value);
+      var targetWeight = parseFloat(obTargetInput.value);
+      if (!Number.isFinite(targetWeight) || targetWeight < 0) {
+        setInlineMessage(obTargetValidation, 'Goal weight must be 0 or greater.');
+        return;
+      }
+      if (!Number.isFinite(startWeight) || startWeight <= 0) return;
+
+      if (startWeight <= targetWeight) {
+        setInlineMessage(obWeightWarning, 'Tip: starting weight is usually above goal weight. You can still continue.');
+      }
+
       e.target._handled = true;
       var profile = {
         name: document.getElementById('ob-name').value.trim(),
-        height: document.getElementById('ob-height').value,
-        heightUnit: document.getElementById('ob-height-unit').value,
-        startWeight: document.getElementById('ob-weight').value,
+        height: normalizedHeight.value,
+        heightUnit: 'cm',
+        startWeight: obWeightInput.value,
         startDate: formatLocalDate(new Date()),
         medication: document.getElementById('ob-medication').value,
         age: '',
       };
       Store.saveProfile(profile);
 
-      var weightUnit = document.getElementById('ob-weight-unit').value;
+      var weightUnit = obWeightUnit.value;
       Store.saveSettings({ ...Store.getSettings(), weightUnit });
 
-      var targetWeight = document.getElementById('ob-target').value;
-      Store.saveGoals({ ...Store.getGoals(), targetWeight });
+      Store.saveGoals({ ...Store.getGoals(), targetWeight: obTargetInput.value });
 
       Store.addWeight({
         date: profile.startDate,
