@@ -3249,6 +3249,18 @@ const App = (() => {
 
     document.getElementById('btn-save-settings').addEventListener('click', () => saveAllSettings());
 
+    // Persist current dose in real-time so it isn't lost when navigating away from Settings.
+    const setDosageInput = document.getElementById('set-dosage');
+    if (setDosageInput) {
+      const persistDosageDraft = () => {
+        const profile = Store.getProfile();
+        profile.dosage = setDosageInput.value;
+        Store.saveProfile(profile);
+      };
+      setDosageInput.addEventListener('input', persistDosageDraft);
+      setDosageInput.addEventListener('change', persistDosageDraft);
+    }
+
     // Doctor visit report
     document.getElementById('btn-doctor-report').addEventListener('click', generateDoctorReport);
 
