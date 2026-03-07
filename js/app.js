@@ -326,6 +326,15 @@ const App = (() => {
     var screenChooser = document.getElementById('ob-screen-chooser');
     var screenForm = document.getElementById('ob-screen-form');
     var screenSignin = document.getElementById('ob-screen-signin');
+    var restorePanel = document.getElementById('ob-restore-options');
+    var btnReturningUser = document.getElementById('btn-ob-returning-user');
+
+    function setRestorePanelOpen(isOpen) {
+      if (!restorePanel || !btnReturningUser) return;
+      restorePanel.style.display = isOpen ? '' : 'none';
+      restorePanel.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+      btnReturningUser.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    }
 
     // --- Screen navigation ---
     function showObScreen(screen) {
@@ -333,6 +342,7 @@ const App = (() => {
       screenForm.style.display = 'none';
       screenSignin.style.display = 'none';
       screen.style.display = '';
+      if (screen === screenChooser) setRestorePanelOpen(false);
       screen.closest('.modal').scrollTop = 0;
     }
 
@@ -341,7 +351,15 @@ const App = (() => {
       showObScreen(screenForm);
     });
 
-    // "Sign In" → returning user (only visible if Auth is available and configured)
+    // "Already have data?" -> toggle restore options panel
+    if (btnReturningUser) {
+      btnReturningUser.addEventListener('click', function () {
+        var isOpen = btnReturningUser.getAttribute('aria-expanded') === 'true';
+        setRestorePanelOpen(!isOpen);
+      });
+    }
+
+    // "Sign in to sync" → returning user (only visible if Auth is available and configured)
     var btnSignIn = document.getElementById('btn-ob-sign-in');
     if (typeof Auth !== 'undefined' && Auth.isConfigured()) {
       btnSignIn.style.display = '';
@@ -367,8 +385,7 @@ const App = (() => {
 
     // "Restore from backup" links (on chooser and sign-in screens)
     var obImportFile = document.getElementById('ob-import-file');
-    document.getElementById('btn-ob-restore-link').addEventListener('click', function (e) {
-      e.preventDefault();
+    document.getElementById('btn-ob-restore-link').addEventListener('click', function () {
       obImportFile.click();
     });
     document.getElementById('btn-ob-restore-link-signin').addEventListener('click', function (e) {

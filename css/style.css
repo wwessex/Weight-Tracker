@@ -1759,6 +1759,34 @@ a { color: var(--primary); text-decoration: none; }
   padding-bottom: 28px;
 }
 
+.ob-chooser-help {
+  margin-top: 10px;
+  margin-bottom: 14px;
+  text-align: center;
+}
+
+.ob-restore-options {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.ob-restore-options-title {
+  margin: 0 0 10px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.ob-restore-options .btn + .btn {
+  margin-top: 10px;
+}
+
+.ob-restore-options .ob-chooser-help {
+  margin-bottom: 0;
+}
+
 .ob-back-btn {
   position: absolute;
   top: 12px;

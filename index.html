@@ -290,9 +290,16 @@
           <p>Track your weight loss journey and medication doses</p>
         </div>
         <div class="modal-body ob-chooser-body">
-          <button type="button" class="btn btn-primary btn-block" id="btn-ob-new-user">Get Started</button>
-          <button type="button" class="btn btn-outline btn-block" id="btn-ob-sign-in" style="display:none;">Sign In</button>
-          <p class="form-help ob-restore-link">Have a backup file? <a href="#" id="btn-ob-restore-link">Restore from backup</a></p>
+          <button type="button" class="btn btn-primary btn-block" id="btn-ob-new-user">Get started</button>
+          <p class="form-help ob-chooser-help">New users: <strong>Creates a local profile</strong></p>
+
+          <button type="button" class="btn btn-outline btn-block" id="btn-ob-returning-user" aria-expanded="false" aria-controls="ob-restore-options">Already have data?</button>
+          <div id="ob-restore-options" class="ob-restore-options" style="display:none;" aria-hidden="true">
+            <p class="form-help ob-restore-options-title">Restore options</p>
+            <button type="button" class="btn btn-outline btn-block" id="btn-ob-sign-in" style="display:none;">Sign in to sync</button>
+            <button type="button" class="btn btn-outline btn-block" id="btn-ob-restore-link">Restore backup file</button>
+            <p class="form-help ob-chooser-help">Returning users: <strong>Restores your previous data</strong></p>
+          </div>
           <input type="file" id="ob-import-file" accept=".json,.gz" style="display:none;" aria-hidden="true">
         </div>
       </div>
@@ -391,7 +398,7 @@
           </div>
           <button type="button" class="btn btn-ghost btn-sm ob-back-btn" id="btn-ob-back-signin">&larr; Back</button>
           <h2>Welcome Back!</h2>
-          <p>Sign in to restore your data</p>
+          <p>Sign in to sync and restore your previous data</p>
         </div>
         <div class="modal-body">
           <form id="ob-signin-form">
@@ -411,7 +418,7 @@
             </div>
           </div>
           <div class="ob-divider"><span>or</span></div>
-          <p class="form-help" style="text-align:center;">Have a backup file instead? <a href="#" id="btn-ob-restore-link-signin">Restore from backup</a></p>
+          <p class="form-help" style="text-align:center;">Have a backup file instead? <a href="#" id="btn-ob-restore-link-signin">Restore backup file</a></p>
         </div>
       </div>
 
