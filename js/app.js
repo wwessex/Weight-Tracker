@@ -13,6 +13,7 @@ const App = (() => {
   let isGlobalListenersBound = false;
   let isCriticalButtonFallbackBound = false;
   let isPhotoStorageChecked = false;
+  let pendingSummaryBannerMessage = '';
   const REMINDER_CHECK_INTERVAL_MS = 30 * 60 * 1000;
   const REMINDER_CATCH_UP_INTERVAL_MS = 2 * 60 * 60 * 1000;
 
@@ -25,6 +26,34 @@ const App = (() => {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  }
+
+  function setButtonLoading(button, loadingText) {
+    if (!button) return;
+    if (!button.dataset.defaultLabel) {
+      button.dataset.defaultLabel = button.textContent;
+    }
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    button.textContent = loadingText || 'Loading...';
+  }
+
+  function clearButtonLoading(button) {
+    if (!button) return;
+    button.disabled = false;
+    button.removeAttribute('aria-busy');
+    if (button.dataset.defaultLabel) {
+      button.textContent = button.dataset.defaultLabel;
+    }
+  }
+
+  function completeRestoreToSummary(successMessage, bannerMessage) {
+    document.getElementById('onboarding-modal').style.display = 'none';
+    document.getElementById('app').style.display = '';
+    pendingSummaryBannerMessage = bannerMessage || 'Your data was restored successfully.';
+    bootApp();
+    navigateTo('summary');
+    toast((successMessage || 'Data restored!') + ' Opening your dashboard…', 'success');
   }
 
   // ===== INIT =====
@@ -72,10 +101,7 @@ const App = (() => {
         window.history.replaceState({}, '', window.location.pathname);
         Store.importFromBackupLink(encoded).then(function (importResult) {
           if (importResult.success) {
-            toast('Data restored from link!', 'success');
-            document.getElementById('onboarding-modal').style.display = 'none';
-            document.getElementById('app').style.display = '';
-            bootApp();
+            completeRestoreToSummary('Data restored from link!', 'Backup restored from link.');
           } else if (importResult.metadataOnly) {
             toast('This is a metadata-only link. Use an encrypted backup file for full restore.', 'error');
             showOnboardingOrApp();
@@ -150,7 +176,7 @@ const App = (() => {
         if (authForm) authForm.style.display = '';
         if (authSent) authSent.style.display = 'none';
         if (authEmail) authEmail.value = '';
-        if (sendBtn) sendBtn.disabled = false;
+        if (sendBtn) clearButtonLoading(sendBtn);
         if (authModal) openModal(authModal);
       }
 
@@ -456,7 +482,7 @@ const App = (() => {
         if (obSigninForm) obSigninForm.style.display = '';
         if (obSigninSent) obSigninSent.style.display = 'none';
         var sendBtn = document.getElementById('btn-ob-send-magic-link');
-        if (sendBtn) sendBtn.disabled = false;
+        if (sendBtn) clearButtonLoading(sendBtn);
         showObScreen(screenSignin);
       });
     }
@@ -491,9 +517,13 @@ const App = (() => {
 
     // "Restore from backup" links (on chooser and sign-in screens)
     var obImportFile = document.getElementById('ob-import-file');
-    document.getElementById('btn-ob-restore-link').addEventListener('click', function () {
-      obImportFile.click();
-    });
+    var obRestoreButton = document.getElementById('btn-ob-restore-link');
+    if (obRestoreButton) {
+      obRestoreButton.addEventListener('click', function () {
+        if (obRestoreButton.disabled) return;
+        obImportFile.click();
+      });
+    }
     document.getElementById('btn-ob-restore-link-signin').addEventListener('click', function (e) {
       e.preventDefault();
       obImportFile.click();
@@ -651,19 +681,20 @@ const App = (() => {
         var email = document.getElementById('ob-signin-email').value.trim();
         if (!email || typeof Auth === 'undefined' || !Auth.isConfigured()) return;
         var sendBtn = document.getElementById('btn-ob-send-magic-link');
-        if (sendBtn) sendBtn.disabled = true;
+        setButtonLoading(sendBtn, 'Sending link...');
         Auth.signInWithMagicLink(email).then(function (result) {
           if (result.error) {
-            toast(result.error.message || 'Failed to send magic link.', 'error');
-            if (sendBtn) sendBtn.disabled = false;
+            toast(result.error.message || 'Failed to send magic link. Try again or cancel.', 'error');
+            clearButtonLoading(sendBtn);
             return;
           }
+          clearButtonLoading(sendBtn);
           document.getElementById('ob-signin-form').style.display = 'none';
           document.getElementById('ob-signin-sent').style.display = '';
           document.getElementById('ob-signin-sent-email').textContent = email;
         }).catch(function (err) {
-          toast((err && err.message) || 'Failed to send magic link. Check your connection.', 'error');
-          if (sendBtn) sendBtn.disabled = false;
+          toast((err && err.message) || 'Failed to send magic link. Check your connection. Try again or cancel.', 'error');
+          clearButtonLoading(sendBtn);
         });
       });
     }
@@ -681,7 +712,10 @@ const App = (() => {
     // --- Import backup file from welcome screen ---
     obImportFile.addEventListener('change', async function (e) {
       var file = e.target.files[0];
-      if (!file) return;
+      if (!file || obImportFile.dataset.importing === 'true') return;
+      obImportFile.dataset.importing = 'true';
+      if (btnReturningUser) btnReturningUser.disabled = true;
+      setButtonLoading(obRestoreButton, 'Importing backup...');
 
       async function readBackupFile(fileToRead) {
         if (fileToRead.name.endsWith('.gz')) {
@@ -702,22 +736,22 @@ const App = (() => {
           var passphrase = prompt('Enter the backup passphrase to decrypt this file.');
           if (passphrase === null) {
             e.target.value = '';
+            obImportFile.dataset.importing = 'false';
+            if (btnReturningUser) btnReturningUser.disabled = false;
+            clearButtonLoading(obRestoreButton);
             return;
           }
           importResult = await Store.importBackupData(content, passphrase);
         }
 
         if (importResult.success) {
-          document.getElementById('onboarding-modal').style.display = 'none';
-          document.getElementById('app').style.display = '';
-          bootApp();
           if (importResult.warnings > 0) {
-            toast('Data restored with ' + importResult.warnings + ' skipped row(s).', 'success');
+            completeRestoreToSummary('Data restored with ' + importResult.warnings + ' skipped row(s).', 'Backup restored from file.');
           } else {
-            toast('Data restored! Welcome back.', 'success');
+            completeRestoreToSummary('Data restored! Welcome back.', 'Backup restored from file.');
           }
         } else if (importResult.requiresPassphrase && importResult.error === 'invalid-passphrase') {
-          toast('Incorrect passphrase. Please try again.', 'error');
+          toast('Incorrect passphrase. Try again or cancel.', 'error');
         } else {
           toast('Import failed. Invalid backup file.', 'error');
         }
@@ -730,6 +764,9 @@ const App = (() => {
       }
 
       e.target.value = '';
+      obImportFile.dataset.importing = 'false';
+      if (btnReturningUser) btnReturningUser.disabled = false;
+      clearButtonLoading(obRestoreButton);
     });
   }
 
@@ -1301,7 +1338,7 @@ const App = (() => {
 
     if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
       if (event === 'SIGNED_IN') {
-        toast('Signed in! Syncing your data...', 'success');
+        toast('Signed in! Syncing your data…', 'success');
         // Close auth modal if open (settings context)
         const authModal = document.getElementById('auth-modal');
         if (authModal) closeModal(authModal);
@@ -1324,10 +1361,7 @@ const App = (() => {
             var profile = Store.getProfile();
             if (profile.name) {
               // Data restored from cloud — close onboarding and boot app
-              onboardingModal.style.display = 'none';
-              document.getElementById('app').style.display = '';
-              bootApp();
-              toast('Welcome back! Your data has been restored.', 'success');
+              completeRestoreToSummary('Welcome back! Your data has been restored.', 'Cloud data restored after sign-in.');
             } else {
               // Signed in but no cloud data — show new user form
               toast('Signed in, but no existing data found. Let\'s set up your profile.', '');
@@ -1796,6 +1830,11 @@ const App = (() => {
       }
     } else {
       banner.style.display = 'none';
+    }
+
+    if (pendingSummaryBannerMessage) {
+      showReminderBanner('dose', pendingSummaryBannerMessage);
+      pendingSummaryBannerMessage = '';
     }
 
     // Stats grid with animated counters
@@ -3113,12 +3152,10 @@ const App = (() => {
       const importResult = await Store.importFromBackupLink(encoded);
       if (importResult.success) {
         if (importResult.warnings > 0) {
-          toast('Data restored' + (fromRestoreParam ? ' from link' : '') + ' with ' + importResult.warnings + ' skipped invalid row(s).', 'success');
+          completeRestoreToSummary('Data restored' + (fromRestoreParam ? ' from link' : '') + ' with ' + importResult.warnings + ' skipped invalid row(s).', 'Backup restored from link.');
         } else {
-          toast('Data restored' + (fromRestoreParam ? ' from link' : '') + '!', 'success');
+          completeRestoreToSummary('Data restored' + (fromRestoreParam ? ' from link' : '') + '!', 'Backup restored from link.');
         }
-        bootApp();
-        navigateTo('summary');
         return;
       }
       if (importResult.metadataOnly) {
@@ -3158,13 +3195,17 @@ const App = (() => {
     });
 
     // Import
+    const importButton = document.getElementById('btn-import');
     document.getElementById('btn-import').addEventListener('click', () => {
+      if (importButton && importButton.disabled) return;
       document.getElementById('import-file').click();
     });
 
     document.getElementById('import-file').addEventListener('change', async (e) => {
       const file = e.target.files[0];
-      if (!file) return;
+      if (!file || e.target.dataset.importing === 'true') return;
+      e.target.dataset.importing = 'true';
+      setButtonLoading(importButton, 'Importing backup...');
 
       async function readBackupFile(fileToRead) {
         if (fileToRead.name.endsWith('.gz')) {
@@ -3185,6 +3226,8 @@ const App = (() => {
           const passphrase = prompt('Enter the backup passphrase to decrypt this file.');
           if (passphrase === null) {
             e.target.value = '';
+            e.target.dataset.importing = 'false';
+            clearButtonLoading(importButton);
             return;
           }
           importResult = await Store.importBackupData(content, passphrase);
@@ -3192,15 +3235,13 @@ const App = (() => {
 
         if (importResult.success) {
           if (importResult.warnings > 0) {
-            toast('Data imported with ' + importResult.warnings + ' skipped invalid row(s).', 'success');
+            completeRestoreToSummary('Data imported with ' + importResult.warnings + ' skipped invalid row(s).', 'Backup imported from file.');
           } else {
-            toast('Data imported!', 'success');
+            completeRestoreToSummary('Data imported!', 'Backup imported from file.');
           }
-          bootApp();
-          navigateTo('summary');
           await updateBackupLinkState();
         } else if (importResult.requiresPassphrase && importResult.error === 'invalid-passphrase') {
-          toast('Incorrect passphrase. Please try again.', 'error');
+          toast('Incorrect passphrase. Try again or cancel.', 'error');
         } else {
           toast('Import failed. Invalid file.', 'error');
         }
@@ -3213,6 +3254,8 @@ const App = (() => {
       }
 
       e.target.value = '';
+      e.target.dataset.importing = 'false';
+      clearButtonLoading(importButton);
     });
 
     // Export/copy backup link (metadata only)
@@ -3290,7 +3333,7 @@ const App = (() => {
         document.getElementById('auth-magic-link-sent').style.display = 'none';
         document.getElementById('auth-email').value = '';
         const sendBtn = document.getElementById('btn-send-magic-link');
-        if (sendBtn) sendBtn.disabled = false;
+        if (sendBtn) clearButtonLoading(sendBtn);
         const passkeyBtn = document.getElementById('btn-sign-in-passkey');
         if (passkeyBtn) {
           passkeyBtn.disabled = false;
@@ -3307,19 +3350,20 @@ const App = (() => {
         const email = document.getElementById('auth-email').value.trim();
         if (!email || typeof Auth === 'undefined' || !Auth.isConfigured()) return;
         const sendBtn = document.getElementById('btn-send-magic-link');
-        if (sendBtn) sendBtn.disabled = true;
+        setButtonLoading(sendBtn, 'Sending link...');
         Auth.signInWithMagicLink(email).then(function (result) {
           if (result.error) {
-            toast(result.error.message || 'Failed to send magic link.', 'error');
-            if (sendBtn) sendBtn.disabled = false;
+            toast(result.error.message || 'Failed to send magic link. Try again or cancel.', 'error');
+            clearButtonLoading(sendBtn);
             return;
           }
+          clearButtonLoading(sendBtn);
           document.getElementById('auth-form').style.display = 'none';
           document.getElementById('auth-magic-link-sent').style.display = '';
           document.getElementById('auth-sent-email').textContent = email;
         }).catch(function (err) {
-          toast((err && err.message) || 'Failed to send magic link. Check your connection.', 'error');
-          if (sendBtn) sendBtn.disabled = false;
+          toast((err && err.message) || 'Failed to send magic link. Check your connection. Try again or cancel.', 'error');
+          clearButtonLoading(sendBtn);
         });
       });
     }
