@@ -333,6 +333,7 @@ const App = (() => {
 
   // ===== ONBOARDING =====
   function initOnboarding() {
+    var onboardingModal = document.getElementById('onboarding-modal');
     var screenChooser = document.getElementById('ob-screen-chooser');
     var screenForm = document.getElementById('ob-screen-form');
     var screenSignin = document.getElementById('ob-screen-signin');
@@ -341,6 +342,8 @@ const App = (() => {
     var progressChooser = document.getElementById('ob-progress-chooser');
     var progressForm = document.getElementById('ob-progress-form');
     var progressSignin = document.getElementById('ob-progress-signin');
+    var obLiveRegion = document.getElementById('ob-screen-live');
+    var hasInertSupport = 'inert' in document.createElement('div');
     var activeObFlow = 'new';
 
     function getProgressText(screen) {
@@ -364,15 +367,61 @@ const App = (() => {
       btnReturningUser.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
     }
 
+    function setScreenFocusableState(screen, isActive) {
+      if (!screen) return;
+      screen.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+      if (hasInertSupport) {
+        screen.inert = !isActive;
+        return;
+      }
+      screen.querySelectorAll('button, [href], input, select, textarea, [tabindex]').forEach(function (el) {
+        if (isActive) {
+          if (el.hasAttribute('data-ob-prev-tabindex')) {
+            var prev = el.getAttribute('data-ob-prev-tabindex');
+            if (prev === '') el.removeAttribute('tabindex');
+            else el.setAttribute('tabindex', prev);
+            el.removeAttribute('data-ob-prev-tabindex');
+          }
+        } else if (!el.hasAttribute('data-ob-prev-tabindex')) {
+          el.setAttribute('data-ob-prev-tabindex', el.getAttribute('tabindex') || '');
+          el.setAttribute('tabindex', '-1');
+        }
+      });
+    }
+
+    function focusOnboardingScreen(screen) {
+      if (!screen) return;
+      var preferred = screen.querySelector('h1[tabindex="-1"], h2[tabindex="-1"], h3[tabindex="-1"]');
+      var firstInteractive = screen.querySelector('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])');
+      var focusTarget = preferred || firstInteractive;
+      if (focusTarget && typeof focusTarget.focus === 'function') {
+        focusTarget.focus();
+      }
+    }
+
+    function announceObScreen(screen) {
+      if (!obLiveRegion || !screen) return;
+      var message = screen === screenSignin ? 'Sign-in step' : 'New user setup step';
+      obLiveRegion.textContent = '';
+      setTimeout(function () {
+        obLiveRegion.textContent = message;
+      }, 30);
+    }
+
     // --- Screen navigation ---
     function showObScreen(screen) {
-      screenChooser.style.display = 'none';
-      screenForm.style.display = 'none';
-      screenSignin.style.display = 'none';
-      screen.style.display = '';
+      [screenChooser, screenForm, screenSignin].forEach(function (obScreen) {
+        var isActive = obScreen === screen;
+        obScreen.style.display = isActive ? '' : 'none';
+        setScreenFocusableState(obScreen, isActive);
+      });
       if (screen === screenChooser) setRestorePanelOpen(false);
       updateOnboardingProgress(screen);
+      announceObScreen(screen);
       screen.closest('.modal').scrollTop = 0;
+      setTimeout(function () {
+        focusOnboardingScreen(screen);
+      }, 0);
     }
 
     // "Get Started" → new user form
@@ -422,6 +471,24 @@ const App = (() => {
       showObScreen(screenChooser);
     });
 
+    if (onboardingModal) {
+      onboardingModal.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          activeObFlow = 'new';
+          showObScreen(screenChooser);
+          return;
+        }
+        if (e.key !== 'Backspace') return;
+        if (e.target && /input|textarea/i.test(e.target.tagName)) return;
+        if (screenForm.style.display !== 'none' || screenSignin.style.display !== 'none') {
+          e.preventDefault();
+          activeObFlow = screenSignin.style.display !== 'none' ? 'returning' : 'new';
+          showObScreen(screenChooser);
+        }
+      });
+    }
+
     // "Restore from backup" links (on chooser and sign-in screens)
     var obImportFile = document.getElementById('ob-import-file');
     document.getElementById('btn-ob-restore-link').addEventListener('click', function () {
@@ -432,7 +499,7 @@ const App = (() => {
       obImportFile.click();
     });
 
-    updateOnboardingProgress(screenChooser);
+    showObScreen(screenChooser);
 
     // --- Existing onboarding form logic ---
     var onboardingForm = document.getElementById('onboarding-form');

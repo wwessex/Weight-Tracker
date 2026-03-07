@@ -264,11 +264,13 @@
   </noscript>
 
   <!-- Onboarding Modal -->
-  <div id="onboarding-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Welcome setup">
+  <div id="onboarding-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="ob-modal-title">
     <div class="modal">
+      <h2 id="ob-modal-title" class="sr-only">Welcome setup</h2>
+      <p id="ob-screen-live" class="sr-only" aria-live="polite" aria-atomic="true"></p>
 
       <!-- Screen 1: Welcome Chooser -->
-      <div id="ob-screen-chooser">
+      <section id="ob-screen-chooser" aria-labelledby="ob-title-chooser">
         <div class="modal-header">
           <div class="onboarding-logo">
             <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" class="onboarding-logo-icon" aria-hidden="true">
@@ -287,7 +289,7 @@
             <span class="onboarding-logo-text">Jab It</span>
           </div>
           <p class="ob-progress-indicator" id="ob-progress-chooser" aria-live="polite">Step 1 of 2 · New user setup</p>
-          <h2>Choose how you want to continue</h2>
+          <h2 id="ob-title-chooser" tabindex="-1">Choose how you want to continue</h2>
           <p>Pick a setup option to get into your tracker in under 1 minute.</p>
         </div>
         <div class="modal-body ob-chooser-body">
@@ -303,10 +305,10 @@
           </div>
           <input type="file" id="ob-import-file" accept=".json,.gz" style="display:none;" aria-hidden="true">
         </div>
-      </div>
+      </section>
 
       <!-- Screen 2: New User Form -->
-      <div id="ob-screen-form" style="display:none;">
+      <section id="ob-screen-form" style="display:none;" aria-labelledby="ob-title-form">
         <div class="modal-header">
           <div class="onboarding-logo">
             <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" class="onboarding-logo-icon" aria-hidden="true">
@@ -326,7 +328,7 @@
           </div>
           <button type="button" class="btn btn-ghost btn-sm ob-back-btn" id="btn-ob-back-form">&larr; Back</button>
           <p class="ob-progress-indicator" id="ob-progress-form" aria-live="polite">Step 2 of 2 · New user setup</p>
-          <h2>Create your profile</h2>
+          <h2 id="ob-title-form" tabindex="-1">Create your profile</h2>
           <p>Add your starting details to finish setup in under 1 minute.</p>
         </div>
         <form id="onboarding-form" class="modal-body">
@@ -388,10 +390,10 @@
           </div>
           <button type="submit" class="btn btn-primary btn-block">Get Started</button>
         </form>
-      </div>
+      </section>
 
       <!-- Screen 3: Sign In (returning user) -->
-      <div id="ob-screen-signin" style="display:none;">
+      <section id="ob-screen-signin" style="display:none;" aria-labelledby="ob-title-signin">
         <div class="modal-header">
           <div class="onboarding-logo">
             <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" class="onboarding-logo-icon" aria-hidden="true">
@@ -411,7 +413,7 @@
           </div>
           <button type="button" class="btn btn-ghost btn-sm ob-back-btn" id="btn-ob-back-signin">&larr; Back</button>
           <p class="ob-progress-indicator" id="ob-progress-signin" aria-live="polite">Step 2 of 2 · Returning user restore</p>
-          <h2>Sign in to restore your tracker</h2>
+          <h2 id="ob-title-signin" tabindex="-1">Sign in to restore your tracker</h2>
           <p>Use your email to sync your data and resume in under 1 minute.</p>
         </div>
         <div class="modal-body">
@@ -434,7 +436,7 @@
           <div class="ob-divider"><span>or</span></div>
           <p class="form-help" style="text-align:center;">Have a backup file instead? <a href="#" id="btn-ob-restore-link-signin">Restore backup file</a></p>
         </div>
-      </div>
+      </section>
 
     </div>
   </div>
