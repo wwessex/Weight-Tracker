@@ -16,6 +16,8 @@ concurrency:
 
 jobs:
   deploy:
+    env:
+      SITE_BASE_URL: https://wwessex.github.io/Weight-Tracker
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -26,6 +28,14 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
+
+      - name: Sync sitemap lastmod + validate release metadata
+        run: |
+          DEPLOY_DATE="$(date -u +%F)"
+          python3 scripts/release_check.py \
+            --base-url "$SITE_BASE_URL" \
+            --date "$DEPLOY_DATE" \
+            --write-lastmod
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
