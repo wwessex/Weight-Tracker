@@ -1,0 +1,59 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Jab It social cover image</title>
+  <desc id="desc">Jab It branding with text: Free Weight Loss and GLP-1 Medication Tracker. Track doses, weight, fasting, measurements, and exercise privately on your device.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6D7CF0"/>
+      <stop offset="0.5" stop-color="#5E61E6"/>
+      <stop offset="1" stop-color="#2F5F8C"/>
+    </linearGradient>
+    <radialGradient id="glow1" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(150 560) rotate(-42) scale(290 290)">
+      <stop stop-color="#6CC7FF" stop-opacity="0.52"/>
+      <stop offset="1" stop-color="#6CC7FF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(40 72) rotate(12) scale(320 260)">
+      <stop stop-color="#9EA6FF" stop-opacity="0.44"/>
+      <stop offset="1" stop-color="#9EA6FF" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="cardShadow" x="0" y="0" width="1200" height="630" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#111827" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <circle cx="150" cy="560" r="290" fill="url(#glow1)"/>
+  <circle cx="40" cy="72" r="300" fill="url(#glow2)"/>
+
+  <g transform="translate(90 82)" filter="url(#cardShadow)">
+    <g transform="rotate(-15 42 42)">
+      <rect x="0" y="0" width="84" height="84" rx="15" fill="#3CCFC0" fill-opacity="0.22"/>
+      <line x1="18" y1="22" x2="58" y2="22" stroke="#62F0DE" stroke-width="6" stroke-linecap="round"/>
+      <line x1="18" y1="38" x2="58" y2="38" stroke="#62F0DE" stroke-width="6" stroke-linecap="round"/>
+      <line x1="18" y1="54" x2="58" y2="54" stroke="#62F0DE" stroke-width="6" stroke-linecap="round"/>
+      <line x1="42" y1="68" x2="42" y2="88" stroke="#62F0DE" stroke-width="8" stroke-linecap="round"/>
+    </g>
+    <text x="108" y="67" fill="#EEF2FF" font-family="Inter, Segoe UI, Roboto, Arial, sans-serif" font-size="56" font-weight="800">Jab It</text>
+  </g>
+
+  <text x="90" y="260" fill="#F8FAFC" font-family="Inter, Segoe UI, Roboto, Arial, sans-serif" font-size="62" font-weight="900">Free Weight Loss &amp; GLP-1</text>
+  <text x="90" y="326" fill="#F8FAFC" font-family="Inter, Segoe UI, Roboto, Arial, sans-serif" font-size="62" font-weight="900">Medication Tracker</text>
+
+  <text x="90" y="390" fill="#DBEAFE" font-family="Inter, Segoe UI, Roboto, Arial, sans-serif" font-size="48" font-weight="500">Track doses, weight, fasting, measurements, and exercise —</text>
+  <text x="90" y="442" fill="#DBEAFE" font-family="Inter, Segoe UI, Roboto, Arial, sans-serif" font-size="48" font-weight="500">privately on your device.</text>
+
+  <g transform="translate(90 484)">
+    <g>
+      <rect width="220" height="48" rx="24" fill="#FFFFFF" fill-opacity="0.16" stroke="#FFFFFF" stroke-opacity="0.2"/>
+      <text x="16" y="32" fill="#EEF2FF" font-family="Inter, Segoe UI, Roboto, Arial, sans-serif" font-size="38" font-weight="600">Private by Default</text>
+    </g>
+    <g transform="translate(244 0)">
+      <rect width="220" height="48" rx="24" fill="#FFFFFF" fill-opacity="0.16" stroke="#FFFFFF" stroke-opacity="0.2"/>
+      <text x="18" y="32" fill="#EEF2FF" font-family="Inter, Segoe UI, Roboto, Arial, sans-serif" font-size="38" font-weight="600">Fast Daily Logs</text>
+    </g>
+    <g transform="translate(488 0)">
+      <rect width="220" height="48" rx="24" fill="#FFFFFF" fill-opacity="0.16" stroke="#FFFFFF" stroke-opacity="0.2"/>
+      <text x="18" y="32" fill="#EEF2FF" font-family="Inter, Segoe UI, Roboto, Arial, sans-serif" font-size="38" font-weight="600">Progress Insights</text>
+    </g>
+  </g>
+</svg>
