@@ -1300,8 +1300,8 @@ const Store = (() => {
   // Injection site rotation recommendation
   function getNextRecommendedSite() {
     const jabs = getJabs();
-    const allSites = ['abdomen-left', 'abdomen-right', 'thigh-left', 'thigh-right', 'arm-left', 'arm-right'];
-    if (jabs.length === 0) return { recommended: 'abdomen-left', lastSite: null, siteHistory: {} };
+    const allSites = ['abdomen-upper-left', 'abdomen-upper-right', 'abdomen-lower-left', 'abdomen-lower-right', 'thigh-left', 'thigh-right', 'arm-left', 'arm-right'];
+    if (jabs.length === 0) return { recommended: 'abdomen-upper-left', lastSite: null, siteHistory: {} };
 
     // Count recent site usage (last 6 doses)
     const recentJabs = jabs.slice(-6);

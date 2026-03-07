@@ -515,10 +515,14 @@
             <line x1="100" y1="180" x2="70" y2="320" stroke="var(--text-muted)" stroke-width="1.5" opacity="0.5"/>
             <line x1="100" y1="180" x2="130" y2="320" stroke="var(--text-muted)" stroke-width="1.5" opacity="0.5"/>
             <!-- Injection site markers -->
-            <circle id="site-abdomen-left" cx="80" cy="145" r="14" class="site-marker" data-site="abdomen-left"/>
-            <text x="80" y="149" text-anchor="middle" class="site-marker-text">L</text>
-            <circle id="site-abdomen-right" cx="120" cy="145" r="14" class="site-marker" data-site="abdomen-right"/>
-            <text x="120" y="149" text-anchor="middle" class="site-marker-text">R</text>
+            <circle id="site-abdomen-upper-left" cx="80" cy="132" r="12" class="site-marker" data-site="abdomen-upper-left"/>
+            <text x="80" y="136" text-anchor="middle" class="site-marker-text">UL</text>
+            <circle id="site-abdomen-upper-right" cx="120" cy="132" r="12" class="site-marker" data-site="abdomen-upper-right"/>
+            <text x="120" y="136" text-anchor="middle" class="site-marker-text">UR</text>
+            <circle id="site-abdomen-lower-left" cx="80" cy="160" r="12" class="site-marker" data-site="abdomen-lower-left"/>
+            <text x="80" y="164" text-anchor="middle" class="site-marker-text">LL</text>
+            <circle id="site-abdomen-lower-right" cx="120" cy="160" r="12" class="site-marker" data-site="abdomen-lower-right"/>
+            <text x="120" y="164" text-anchor="middle" class="site-marker-text">LR</text>
             <circle id="site-thigh-left" cx="78" cy="240" r="14" class="site-marker" data-site="thigh-left"/>
             <text x="78" y="244" text-anchor="middle" class="site-marker-text">L</text>
             <circle id="site-thigh-right" cx="122" cy="240" r="14" class="site-marker" data-site="thigh-right"/>
@@ -1170,8 +1174,10 @@
             <label for="dose-site">Injection Site</label>
             <select id="dose-site">
               <option value="">Select site...</option>
-              <option value="abdomen-left">Abdomen (Left)</option>
-              <option value="abdomen-right">Abdomen (Right)</option>
+              <option value="abdomen-upper-left">Abdomen (Upper Left)</option>
+              <option value="abdomen-upper-right">Abdomen (Upper Right)</option>
+              <option value="abdomen-lower-left">Abdomen (Lower Left)</option>
+              <option value="abdomen-lower-right">Abdomen (Lower Right)</option>
               <option value="thigh-left">Thigh (Left)</option>
               <option value="thigh-right">Thigh (Right)</option>
               <option value="arm-left">Upper Arm (Left)</option>

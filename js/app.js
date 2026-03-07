@@ -883,6 +883,10 @@ const App = (() => {
 
   function siteLabel(site) {
     const labels = {
+      'abdomen-upper-left': 'Abdomen (UL)',
+      'abdomen-upper-right': 'Abdomen (UR)',
+      'abdomen-lower-left': 'Abdomen (LL)',
+      'abdomen-lower-right': 'Abdomen (LR)',
       'abdomen-left': 'Abdomen (L)',
       'abdomen-right': 'Abdomen (R)',
       'thigh-left': 'Thigh (L)',
@@ -2127,7 +2131,7 @@ const App = (() => {
     }
     card.style.display = '';
     const data = Store.getNextRecommendedSite();
-    const allSites = ['abdomen-left', 'abdomen-right', 'thigh-left', 'thigh-right', 'arm-left', 'arm-right'];
+    const allSites = ['abdomen-upper-left', 'abdomen-upper-right', 'abdomen-lower-left', 'abdomen-lower-right', 'thigh-left', 'thigh-right', 'arm-left', 'arm-right'];
 
     allSites.forEach(s => {
       const el = document.getElementById('site-' + s);
@@ -3846,7 +3850,7 @@ const App = (() => {
     const medLabels = { semaglutide: 'Semaglutide (Ozempic/Wegovy)', tirzepatide: 'Tirzepatide (Mounjaro/Zepbound)', liraglutide: 'Liraglutide (Saxenda)', other: 'Other', none: 'None' };
     const medName = medLabels[report.patient.medication] || report.patient.medication || 'Not specified';
 
-    const siteLabels = { 'abdomen-left': 'Abdomen (L)', 'abdomen-right': 'Abdomen (R)', 'thigh-left': 'Thigh (L)', 'thigh-right': 'Thigh (R)', 'arm-left': 'Arm (L)', 'arm-right': 'Arm (R)' };
+    const siteLabels = { 'abdomen-upper-left': 'Abdomen (UL)', 'abdomen-upper-right': 'Abdomen (UR)', 'abdomen-lower-left': 'Abdomen (LL)', 'abdomen-lower-right': 'Abdomen (LR)', 'abdomen-left': 'Abdomen (L)', 'abdomen-right': 'Abdomen (R)', 'thigh-left': 'Thigh (L)', 'thigh-right': 'Thigh (R)', 'arm-left': 'Arm (L)', 'arm-right': 'Arm (R)' };
 
     function formatChange(val) {
       if (!val) return '0';
