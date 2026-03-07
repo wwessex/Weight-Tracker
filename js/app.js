@@ -1699,8 +1699,8 @@ const App = (() => {
         const timeParts = stats.nextJabTime.split(':');
         target.setHours(parseInt(timeParts[0], 10) || 0, parseInt(timeParts[1], 10) || 0, 0, 0);
       } else {
-        // No time recorded — default to start of day
-        target.setHours(0, 0, 0, 0);
+        // No time recorded — default to 9 AM as a reasonable dose time
+        target.setHours(9, 0, 0, 0);
       }
       const diffMs = target - now;
       const totalHours = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60)));
@@ -1745,6 +1745,8 @@ const App = (() => {
       if (stats.nextJabTime) {
         const tp = stats.nextJabTime.split(':');
         targetForRing.setHours(parseInt(tp[0], 10) || 0, parseInt(tp[1], 10) || 0, 0, 0);
+      } else {
+        targetForRing.setHours(9, 0, 0, 0);
       }
       const cycleDuration = cycleDays * 24 * 60 * 60 * 1000;
       const remaining = targetForRing - new Date();
