@@ -333,9 +333,17 @@
             <input type="text" id="ob-name" placeholder="Enter your name" required autocomplete="name">
           </div>
           <div class="form-row">
-            <div class="form-group">
+            <div class="form-group" id="ob-height-cm-group">
               <label for="ob-height">Height</label>
-              <input type="number" id="ob-height" placeholder="170" step="0.1" required>
+              <input type="number" id="ob-height" placeholder="170" step="0.1" min="100" max="250" required>
+            </div>
+            <div class="form-group" id="ob-height-imperial-group" style="display:none;">
+              <label for="ob-height-ft">Height</label>
+              <div class="form-row" style="gap:8px;">
+                <input type="number" id="ob-height-ft" placeholder="5" min="3" max="8" step="1" inputmode="numeric" style="flex:1;">
+                <input type="number" id="ob-height-in" placeholder="10" min="0" max="11" step="1" inputmode="numeric" style="flex:1;">
+              </div>
+              <p class="form-help">Feet and inches</p>
             </div>
             <div class="form-group">
               <label for="ob-height-unit">Unit</label>
@@ -345,10 +353,11 @@
               </select>
             </div>
           </div>
+          <p id="ob-height-validation" class="form-help" style="display:none;color:#dc2626;"></p>
           <div class="form-row">
             <div class="form-group">
               <label for="ob-weight">Starting Weight (<span class="ob-weight-unit-label">kg</span>)</label>
-              <input type="number" id="ob-weight" placeholder="85" step="0.1" required>
+              <input type="number" id="ob-weight" placeholder="85" step="0.1" min="0.1" max="500" required>
             </div>
             <div class="form-group">
               <label for="ob-weight-unit">Unit</label>
@@ -359,9 +368,11 @@
               </select>
             </div>
           </div>
+          <p id="ob-weight-warning" class="form-help" style="display:none;color:#b45309;"></p>
           <div class="form-group">
             <label for="ob-target">Goal Weight (<span class="ob-weight-unit-label">kg</span>)</label>
-            <input type="number" id="ob-target" placeholder="70" step="0.1" required>
+            <input type="number" id="ob-target" placeholder="70" step="0.1" min="0" max="500" required>
+            <p id="ob-target-validation" class="form-help" style="display:none;color:#dc2626;"></p>
           </div>
           <div class="form-group">
             <label for="ob-medication">Medication</label>
