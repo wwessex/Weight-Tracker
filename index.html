@@ -62,37 +62,122 @@
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "WebApplication",
-    "name": "Jab It",
-    "alternateName": "Jab It: Weight Loss Tracker",
-    "url": "https://wwessex.github.io/Weight-Tracker/",
-    "description": "Free, private weight loss tracker for GLP-1 medications like Ozempic, Wegovy, Mounjaro and Zepbound. Log doses, track weight, body measurements, fasting and exercise. All data stays on your device.",
-    "applicationCategory": "HealthApplication",
-    "operatingSystem": "Any",
-    "browserRequirements": "Requires a modern web browser with JavaScript and localStorage support",
-    "offers": {
-      "@type": "Offer",
-      "price": "0",
-      "priceCurrency": "USD"
-    },
-    "featureList": [
-      "Weight tracking with charts and trends",
-      "GLP-1 medication dose logging (Ozempic, Wegovy, Mounjaro, Zepbound, Saxenda)",
-      "BMI calculation",
-      "Body measurement tracking",
-      "Intermittent fasting timer",
-      "Exercise logging",
-      "Mood, energy and fatigue journaling",
-      "Progress photos",
-      "Doctor report generation",
-      "Data export (JSON and CSV)",
-      "Encrypted backup support",
-      "Dark mode and calm theme",
-      "Offline-capable PWA"
-    ],
-    "screenshot": "https://wwessex.github.io/Weight-Tracker/icons/icon-512.png",
-    "softwareVersion": "1.0",
-    "inLanguage": "en"
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://wwessex.github.io/Weight-Tracker/#organization",
+        "name": "Jab It",
+        "url": "https://wwessex.github.io/Weight-Tracker/",
+        "sameAs": [
+          "https://wwessex.github.io/Weight-Tracker/"
+        ]
+      },
+      {
+        "@type": "WebApplication",
+        "@id": "https://wwessex.github.io/Weight-Tracker/#webapp",
+        "name": "Jab It",
+        "alternateName": "Jab It: Weight Loss Tracker",
+        "url": "https://wwessex.github.io/Weight-Tracker/",
+        "description": "Free, private weight loss tracker for GLP-1 medications like Ozempic, Wegovy, Mounjaro and Zepbound. Log doses, track weight, body measurements, fasting and exercise. All data stays on your device.",
+        "applicationCategory": "HealthApplication",
+        "operatingSystem": "Any",
+        "browserRequirements": "Requires a modern web browser with JavaScript and localStorage support",
+        "publisher": {
+          "@id": "https://wwessex.github.io/Weight-Tracker/#organization"
+        },
+        "creator": {
+          "@id": "https://wwessex.github.io/Weight-Tracker/#organization"
+        },
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "featureList": [
+          "Weight tracking with charts and trends",
+          "GLP-1 medication dose logging (Ozempic, Wegovy, Mounjaro, Zepbound, Saxenda)",
+          "BMI calculation",
+          "Body measurement tracking",
+          "Intermittent fasting timer",
+          "Exercise logging",
+          "Mood, energy and fatigue journaling",
+          "Progress photos",
+          "Doctor report generation",
+          "Data export (JSON and CSV)",
+          "Encrypted backup support",
+          "Dark mode and calm theme",
+          "Offline-capable PWA"
+        ],
+        "potentialAction": {
+          "@type": "UseAction",
+          "target": {
+            "@type": "EntryPoint",
+            "urlTemplate": "https://wwessex.github.io/Weight-Tracker/"
+          },
+          "name": "Use Jab It to log GLP-1 doses, weight, fasting, and exercise"
+        },
+        "screenshot": "https://wwessex.github.io/Weight-Tracker/icons/icon-512.png",
+        "softwareVersion": "1.0",
+        "inLanguage": "en"
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Is this a free GLP-1 weight tracker?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. You can use Jab It for free to log doses, weight, fasting, and exercise from any modern browser."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I track Ozempic, Wegovy, Mounjaro, or Zepbound in one app?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. You can track common GLP-1 and dual-agonist medications with your own dose schedule and notes."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Do I need to create an account to use it?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. Local tracking works without an account. Optional sign-in is only for users who want cloud backup and sync."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Where is my health data stored?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "By default, data is stored locally on your device in the browser. You control if and when anything leaves your device."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I use this on my phone?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Jab It works on mobile browsers and can be added to your home screen as a web app."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does this replace medical advice?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. It is a personal tracking tool to support your routine, not a substitute for care from your clinician."
+        }
+      }
+    ]
   }
   </script>
 </head>
