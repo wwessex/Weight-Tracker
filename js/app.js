@@ -3302,6 +3302,11 @@ const App = (() => {
     // Doctor visit report
     document.getElementById('btn-doctor-report').addEventListener('click', generateDoctorReport);
 
+    // Settings height unit toggle (cm ↔ feet/inches)
+    document.getElementById('set-height-unit').addEventListener('change', function () {
+      updateSettingsHeightUnitUi();
+    });
+
     // Live theme preview in settings
     document.getElementById('set-theme').addEventListener('change', (e) => {
       const settings = Store.getSettings();
@@ -3564,11 +3569,49 @@ const App = (() => {
     }
   }
 
+  function updateSettingsHeightUnitUi() {
+    var unit = document.getElementById('set-height-unit').value;
+    var cmGroup = document.getElementById('set-height-cm-group');
+    var imperialGroup = document.getElementById('set-height-imperial-group');
+    var isImperial = unit === 'ft';
+
+    cmGroup.style.display = isImperial ? 'none' : '';
+    imperialGroup.style.display = isImperial ? '' : 'none';
+
+    if (isImperial) {
+      // Convert current cm value to feet/inches for display
+      var cmVal = parseFloat(document.getElementById('set-height').value);
+      if (Number.isFinite(cmVal) && cmVal > 0) {
+        var totalInches = cmVal / 2.54;
+        var feet = Math.floor(totalInches / 12);
+        var inches = Math.round(totalInches % 12);
+        if (inches === 12) { feet++; inches = 0; }
+        document.getElementById('set-height-ft').value = feet;
+        document.getElementById('set-height-in').value = inches;
+      }
+    } else {
+      // Convert feet/inches back to cm
+      var ft = parseFloat(document.getElementById('set-height-ft').value);
+      var inc = parseFloat(document.getElementById('set-height-in').value);
+      if (Number.isFinite(ft) && Number.isFinite(inc)) {
+        var cm = ((ft * 12) + inc) * 2.54;
+        document.getElementById('set-height').value = cm.toFixed(1);
+      }
+    }
+  }
+
   function saveAllSettings() {
     const profile = Store.getProfile();
     profile.name = document.getElementById('set-name').value.trim();
-    profile.height = document.getElementById('set-height').value;
-    profile.heightUnit = document.getElementById('set-height-unit').value;
+    var heightUnit = document.getElementById('set-height-unit').value;
+    if (heightUnit === 'ft') {
+      var ft = parseFloat(document.getElementById('set-height-ft').value) || 0;
+      var inc = parseFloat(document.getElementById('set-height-in').value) || 0;
+      profile.height = (((ft * 12) + inc) * 2.54).toFixed(1);
+    } else {
+      profile.height = document.getElementById('set-height').value;
+    }
+    profile.heightUnit = heightUnit;
     profile.startWeight = document.getElementById('set-start-weight').value;
     profile.medication = document.getElementById('set-medication').value;
     profile.dosage = document.getElementById('set-dosage').value;
@@ -3621,8 +3664,26 @@ const App = (() => {
     const goals = Store.getGoals();
 
     document.getElementById('set-name').value = profile.name || '';
+    // Height is always stored in cm internally
     document.getElementById('set-height').value = profile.height || '';
     document.getElementById('set-height-unit').value = profile.heightUnit || 'cm';
+    // Pre-populate feet/inches from stored cm value
+    var storedCm = parseFloat(profile.height);
+    if (Number.isFinite(storedCm) && storedCm > 0) {
+      var totalIn = storedCm / 2.54;
+      var ftVal = Math.floor(totalIn / 12);
+      var inVal = Math.round(totalIn % 12);
+      if (inVal === 12) { ftVal++; inVal = 0; }
+      document.getElementById('set-height-ft').value = ftVal;
+      document.getElementById('set-height-in').value = inVal;
+    } else {
+      document.getElementById('set-height-ft').value = '';
+      document.getElementById('set-height-in').value = '';
+    }
+    // Show/hide correct input group
+    var isImp = (profile.heightUnit || 'cm') === 'ft';
+    document.getElementById('set-height-cm-group').style.display = isImp ? 'none' : '';
+    document.getElementById('set-height-imperial-group').style.display = isImp ? '' : 'none';
     document.getElementById('set-start-weight').value = profile.startWeight || '';
     document.getElementById('set-goal-weight').value = goals.targetWeight || '';
     document.getElementById('set-weight-unit').value = settings.weightUnit || 'kg';
@@ -4281,7 +4342,20 @@ const App = (() => {
     // Patient info
     html += '<h2>Patient Information</h2>';
     html += '<table><tr><th>Name</th><td>' + (report.patient.name || '--') + '</td><th>Age</th><td>' + (report.patient.age || '--') + '</td></tr>';
-    html += '<tr><th>Height</th><td>' + (report.patient.height || '--') + ' ' + (report.patient.heightUnit || 'cm') + '</td><th>Start Date</th><td>' + (report.patient.startDate || '--') + '</td></tr>';
+    var heightDisplay = '--';
+    if (report.patient.height) {
+      if (report.patient.heightUnit === 'ft') {
+        var hCm = parseFloat(report.patient.height);
+        var hTotalIn = hCm / 2.54;
+        var hFt = Math.floor(hTotalIn / 12);
+        var hIn = Math.round(hTotalIn % 12);
+        if (hIn === 12) { hFt++; hIn = 0; }
+        heightDisplay = hFt + '\' ' + hIn + '"';
+      } else {
+        heightDisplay = report.patient.height + ' cm';
+      }
+    }
+    html += '<tr><th>Height</th><td>' + heightDisplay + '</td><th>Start Date</th><td>' + (report.patient.startDate || '--') + '</td></tr>';
     html += '<tr><th>Medication</th><td>' + medName + '</td><th>Dosage</th><td>' + (report.patient.dosage || '--') + '</td></tr>';
     html += '<tr><th>Frequency</th><td>' + (report.patient.frequency || '--') + '</td><th>Target Weight</th><td>' + (report.weightSummary.targetWeight ? report.weightSummary.targetWeight + ' ' + unit : '--') + '</td></tr></table>';
 
