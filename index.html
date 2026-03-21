@@ -20,7 +20,7 @@
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="Jab It social preview cover with title text about free weight loss and GLP-1 medication tracking">
   <meta property="og:site_name" content="Jab It">
-  <meta property="og:locale" content="en_US">
+  <meta property="og:locale" content="en_GB">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
@@ -50,9 +50,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200' fill='none'><g transform='rotate(-35 100 100)'><rect x='78' y='8' width='44' height='10' rx='5' fill='%2314b8a6'/><rect x='94' y='18' width='12' height='26' rx='2' fill='%2314b8a6'/><rect x='78' y='44' width='44' height='80' rx='6' stroke='%2314b8a6' stroke-width='7' fill='none'/><rect x='82' y='82' width='36' height='38' rx='3' fill='%2314b8a6' opacity='0.2'/><line x1='83' y1='64' x2='104' y2='64' stroke='%2314b8a6' stroke-width='4' stroke-linecap='round'/><line x1='83' y1='82' x2='104' y2='82' stroke='%2314b8a6' stroke-width='4' stroke-linecap='round'/><line x1='83' y1='100' x2='104' y2='100' stroke='%2314b8a6' stroke-width='4' stroke-linecap='round'/><rect x='88' y='124' width='24' height='14' rx='2' fill='%2314b8a6'/><line x1='100' y1='138' x2='100' y2='185' stroke='%2314b8a6' stroke-width='5' stroke-linecap='round'/></g></svg>">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <!-- Fonts self-hosted for UK GDPR compliance (no Google CDN IP leakage) -->
   <link rel="stylesheet" href="css/style.css">
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
@@ -91,7 +89,7 @@
         "offers": {
           "@type": "Offer",
           "price": "0",
-          "priceCurrency": "USD"
+          "priceCurrency": "GBP"
         },
         "featureList": [
           "Weight tracking with charts and trends",
@@ -487,6 +485,12 @@
 
   <!-- App Shell -->
   <div id="app" style="display:none;">
+
+    <!-- Privacy Transparency Banner (shown once) -->
+    <div id="privacy-banner" class="privacy-banner" style="display:none;" role="alert">
+      <p>Your data is stored locally on your device. We use third-party CDNs that may process your IP address. <a href="#privacy">Privacy Policy</a></p>
+      <button class="btn btn-sm btn-ghost" id="btn-dismiss-privacy" aria-label="Dismiss privacy notice">Got it</button>
+    </div>
 
     <!-- App Header / Logo -->
     <header class="app-header">
@@ -1094,6 +1098,73 @@
       </div>
 
       <button class="btn btn-primary btn-block" id="btn-save-settings" type="button" style="margin-top:8px;">Save Settings</button>
+      <div style="text-align:center; margin-top:24px; padding-bottom:16px;">
+        <a href="#privacy" style="color:var(--text-muted); font-size:0.85rem;">Privacy Policy</a>
+      </div>
+    </section>
+
+    <!-- ===== Privacy Policy Page ===== -->
+    <section class="page" id="page-privacy">
+      <div class="page-title">
+        <h2>Privacy Policy</h2>
+      </div>
+      <div class="privacy-content">
+        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:16px;">Last updated: 21 March 2026</p>
+
+        <h3>Who we are</h3>
+        <p>Jab It is a free, open-source weight loss and GLP-1 medication tracker. It is a community project with no commercial entity behind it. For privacy queries, please raise an issue on our <a href="https://github.com/wwessex/Weight-Tracker" target="_blank" rel="noopener">GitHub repository</a>.</p>
+
+        <h3>What data we collect</h3>
+        <p>Jab It only processes data that you enter directly. This may include:</p>
+        <ul>
+          <li>Your name, age, and height</li>
+          <li>Weight entries and body measurements</li>
+          <li>Medication doses, injection sites, and side effects</li>
+          <li>Exercise, fasting, and journal entries</li>
+          <li>Progress photos</li>
+          <li>Goal and preference settings</li>
+        </ul>
+        <p>Much of this data constitutes <strong>special category health data</strong> under UK GDPR Article 9. We process this data solely to provide you with the tracking features you have chosen to use.</p>
+
+        <h3>Legal basis for processing</h3>
+        <p>We rely on your <strong>explicit consent</strong> (UK GDPR Article 9(2)(a)) as the legal basis for processing your health data. By entering data into the app, you consent to its processing for the purpose of personal health tracking. You may withdraw consent at any time by clearing your data.</p>
+
+        <h3>Where your data is stored</h3>
+        <p><strong>By default, all data stays on your device</strong> in your browser's local storage. No data is sent to any server unless you explicitly opt in to cloud backup.</p>
+        <p>If you enable cloud sync, your data is stored by Supabase (our cloud provider) on servers within the EU/EEA. Cloud sync requires you to sign in with your email address, which constitutes additional consent for that processing.</p>
+
+        <h3>Third-party services</h3>
+        <p>Jab It uses the following third-party services that may process your IP address when loading the app:</p>
+        <ul>
+          <li><strong>jsDelivr CDN</strong> — delivers Chart.js and Supabase client libraries. <a href="https://www.jsdelivr.com/terms/privacy-policy-jsdelivr-net" target="_blank" rel="noopener">jsDelivr Privacy Policy</a></li>
+          <li><strong>GitHub Pages</strong> — hosts the application. <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener">GitHub Privacy Statement</a></li>
+          <li><strong>Supabase</strong> (only if you enable cloud sync) — stores your encrypted backup data. <a href="https://supabase.com/privacy" target="_blank" rel="noopener">Supabase Privacy Policy</a></li>
+        </ul>
+        <p>We do not use cookies, analytics, advertising, or any other tracking technologies.</p>
+
+        <h3>Data retention</h3>
+        <p>Local data is retained in your browser until you clear it. If you clear your browser data or use the "Clear All Data" feature in Settings, your local data is permanently deleted. Cloud backup data (if enabled) is retained until you delete your account or request deletion.</p>
+
+        <h3>Your rights under UK GDPR</h3>
+        <p>You have the right to:</p>
+        <ul>
+          <li><strong>Access</strong> your data — use the Export feature in Settings</li>
+          <li><strong>Rectify</strong> your data — edit any entry directly in the app</li>
+          <li><strong>Erase</strong> your data — use "Clear All Data" in Settings</li>
+          <li><strong>Data portability</strong> — export your data as encrypted JSON or CSV</li>
+          <li><strong>Withdraw consent</strong> — stop using the app or clear your data at any time</li>
+          <li><strong>Restrict processing</strong> — you control what data you enter</li>
+        </ul>
+
+        <h3>Children</h3>
+        <p>Jab It is not intended for use by children under 13. We do not knowingly collect data from children.</p>
+
+        <h3>Complaints</h3>
+        <p>If you have concerns about how your data is handled, you have the right to lodge a complaint with the <a href="https://ico.org.uk/make-a-complaint/" target="_blank" rel="noopener">Information Commissioner's Office (ICO)</a>.</p>
+
+        <h3>Changes to this policy</h3>
+        <p>We may update this policy from time to time. The "last updated" date at the top of this page will be revised accordingly.</p>
+      </div>
     </section>
 
     <!-- ===== Journal Page ===== -->

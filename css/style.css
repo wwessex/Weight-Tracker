@@ -1,3 +1,40 @@
+/* ===== Self-hosted Inter Font (GDPR-compliant, no Google CDN) ===== */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../fonts/inter-v20-latin-regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../fonts/inter-v20-latin-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../fonts/inter-v20-latin-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../fonts/inter-v20-latin-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('../fonts/inter-v20-latin-800.woff2') format('woff2');
+}
+
 /* ===== Jab It: Weight Loss Tracker - Modern UI ===== */
 
 /* --- SEO Landing Content (kept in DOM but fully hidden in app UI) --- */
@@ -2618,3 +2655,24 @@ textarea:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* --- Privacy Policy Page --- */
+.privacy-content { padding: 0 4px; }
+.privacy-content h3 { margin-top: 20px; margin-bottom: 6px; font-size: 1.05rem; color: var(--text); }
+.privacy-content p, .privacy-content ul { color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin-bottom: 8px; }
+.privacy-content ul { padding-left: 20px; }
+.privacy-content a { color: var(--primary); }
+
+/* --- Privacy Transparency Banner --- */
+.privacy-banner {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.privacy-banner p { margin: 0; flex: 1; line-height: 1.4; }
+.privacy-banner a { color: var(--primary); font-weight: 500; }

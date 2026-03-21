@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jabit-v7';
+const CACHE_NAME = 'jabit-v8';
 const ASSETS = [
   './',
   './index.html',
@@ -9,7 +9,11 @@ const ASSETS = [
   './js/sync.js',
   './js/app.js',
   './manifest.json',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap',
+  './fonts/inter-v20-latin-regular.woff2',
+  './fonts/inter-v20-latin-500.woff2',
+  './fonts/inter-v20-latin-600.woff2',
+  './fonts/inter-v20-latin-700.woff2',
+  './fonts/inter-v20-latin-800.woff2',
   'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js',
   'https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js',
@@ -17,8 +21,6 @@ const ASSETS = [
 
 const APP_SHELL_PATHS = new Set(ASSETS.filter((asset) => !asset.startsWith('http')));
 const ALLOWED_CDN_HOSTS = new Set([
-  'fonts.googleapis.com',
-  'fonts.gstatic.com',
   'cdn.jsdelivr.net',
 ]);
 

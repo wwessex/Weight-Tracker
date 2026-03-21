@@ -147,6 +147,19 @@ const App = (() => {
       }
 
       registerServiceWorker();
+
+      // Privacy transparency banner (shown once, dismiss persisted)
+      if (!localStorage.getItem('shotsy_privacy_acknowledged')) {
+        var privBanner = document.getElementById('privacy-banner');
+        if (privBanner) privBanner.style.display = 'flex';
+      }
+      var privDismiss = document.getElementById('btn-dismiss-privacy');
+      if (privDismiss) {
+        privDismiss.addEventListener('click', function() {
+          localStorage.setItem('shotsy_privacy_acknowledged', '1');
+          document.getElementById('privacy-banner').style.display = 'none';
+        });
+      }
     } catch (e) {
       console.error('[App] Init error:', e);
       if (!didShowApp) {
@@ -950,7 +963,7 @@ const App = (() => {
       fastingTimerInterval = null;
     }
 
-    const refreshers = { summary: refreshSummary, doses: refreshDoses, progress: refreshProgress, journal: refreshJournal, settings: refreshSettings };
+    const refreshers = { summary: refreshSummary, doses: refreshDoses, progress: refreshProgress, journal: refreshJournal, settings: refreshSettings, privacy: function(){} };
     if (refreshers[page]) refreshers[page]();
   }
 
