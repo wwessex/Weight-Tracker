@@ -927,9 +927,17 @@
             <input type="text" id="set-name" autocomplete="name">
           </div>
           <div class="form-row">
-            <div class="form-group">
+            <div class="form-group" id="set-height-cm-group">
               <label for="set-height">Height</label>
-              <input type="number" id="set-height" step="0.1">
+              <input type="number" id="set-height" step="0.1" min="100" max="250" placeholder="170">
+            </div>
+            <div class="form-group" id="set-height-imperial-group" style="display:none;">
+              <label for="set-height-ft">Height</label>
+              <div class="form-row" style="gap:8px;">
+                <input type="number" id="set-height-ft" placeholder="5" min="3" max="8" step="1" inputmode="numeric" style="flex:1;">
+                <input type="number" id="set-height-in" placeholder="10" min="0" max="11" step="1" inputmode="numeric" style="flex:1;">
+              </div>
+              <p class="form-help">Feet and inches</p>
             </div>
             <div class="form-group">
               <label for="set-height-unit">Unit</label>
