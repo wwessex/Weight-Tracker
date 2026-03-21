@@ -871,6 +871,7 @@ const Store = (() => {
         targetWeight: goals.targetWeight || null,
         weightToGo: null,
         progressPercent: 0,
+        percentBodyWeightLost: 0,
         unit: settings.weightUnit,
       };
       _statsCache = emptyResult;
@@ -942,6 +943,7 @@ const Store = (() => {
     const weightToGo = targetWeight ? currentW - targetWeight : null;
     const totalToLose = targetWeight ? start - targetWeight : null;
     const progressPercent = totalToLose && totalToLose > 0 ? Math.min(100, Math.max(0, (totalLost / totalToLose) * 100)) : 0;
+    const percentBodyWeightLost = start > 0 ? (totalLost / start) * 100 : 0;
 
     // Next jab date
     let nextJabDate = null;
@@ -1001,6 +1003,7 @@ const Store = (() => {
       targetWeight,
       weightToGo,
       progressPercent,
+      percentBodyWeightLost,
       unit: settings.weightUnit,
       frequency: profile.frequency || 'weekly',
     };
