@@ -1000,7 +1000,7 @@ const App = (() => {
   })();
 
   // ===== ANIMATION HELPERS =====
-  function animateValue(el, end, duration, suffix) {
+  function animateValue(el, end, duration, suffix, decimals) {
     if (!el || end === null || end === undefined || isNaN(end)) return;
     duration = duration || 600;
     suffix = suffix || '';
@@ -1013,7 +1013,8 @@ const App = (() => {
       const progress = Math.min(elapsed / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
       const current = start + range * eased;
-      el.textContent = (isInt ? Math.round(current) : current.toFixed(1)) + suffix;
+      const dp = decimals !== undefined ? decimals : 1;
+      el.textContent = (isInt ? Math.round(current) : current.toFixed(dp)) + suffix;
       if (progress < 1) requestAnimationFrame(update);
     }
     requestAnimationFrame(update);
@@ -1175,11 +1176,11 @@ const App = (() => {
   }
 
   // Animate a stat value or show a fallback placeholder
-  function displayStat(id, value, suffix, fallback) {
+  function displayStat(id, value, suffix, fallback, decimals) {
     const el = document.getElementById(id);
     if (!el) return;
     if (value != null) {
-      animateValue(el, value, 600, suffix || '');
+      animateValue(el, value, 600, suffix || '', decimals);
     } else {
       el.textContent = fallback !== undefined ? fallback : '--';
     }
@@ -1949,10 +1950,11 @@ const App = (() => {
 
     // Stats grid with animated counters
     displayStat('sum-total-doses', stats.totalJabs > 0 ? stats.totalJabs : null, '', '0');
-    displayStat('sum-weight-lost', stats.totalLost || null, ' ' + unit);
-    displayStat('sum-current', stats.currentWeight || null, ' ' + unit);
-    displayStat('sum-to-goal', stats.weightToGo, ' ' + unit);
-    displayStat('sum-pct-lost', stats.progressPercent > 0 ? stats.progressPercent : null, '%');
+    const sumDecimals = unit === 'st' ? 2 : 1;
+    displayStat('sum-weight-lost', stats.totalLost || null, ' ' + unit, undefined, sumDecimals);
+    displayStat('sum-current', stats.currentWeight || null, ' ' + unit, undefined, sumDecimals);
+    displayStat('sum-to-goal', stats.weightToGo, ' ' + unit, undefined, sumDecimals);
+    displayStat('sum-pct-lost', stats.percentBodyWeightLost > 0 ? stats.percentBodyWeightLost : null, '%');
     displayStat('sum-bmi', stats.bmi || null, '');
 
     // Projected goal date
@@ -2752,12 +2754,13 @@ const App = (() => {
     updateWeightUnitLabels();
 
     // Stats with animated counters
-    displayStat('prog-current', stats.currentWeight || null, ' ' + unit);
-    displayStat('prog-start', stats.startWeight || null, ' ' + unit);
-    displayStat('prog-total-lost', stats.totalLost || null, ' ' + unit);
-    displayStat('prog-pct-lost', stats.progressPercent > 0 ? stats.progressPercent : null, '%');
-    displayStat('prog-to-goal', stats.weightToGo, ' ' + unit);
-    displayStat('prog-weekly-avg', stats.avgWeeklyLoss || null, ' ' + unit);
+    const progDecimals = unit === 'st' ? 2 : 1;
+    displayStat('prog-current', stats.currentWeight || null, ' ' + unit, undefined, progDecimals);
+    displayStat('prog-start', stats.startWeight || null, ' ' + unit, undefined, progDecimals);
+    displayStat('prog-total-lost', stats.totalLost || null, ' ' + unit, undefined, progDecimals);
+    displayStat('prog-pct-lost', stats.percentBodyWeightLost > 0 ? stats.percentBodyWeightLost : null, '%');
+    displayStat('prog-to-goal', stats.weightToGo, ' ' + unit, undefined, progDecimals);
+    displayStat('prog-weekly-avg', stats.avgWeeklyLoss || null, ' ' + unit, undefined, progDecimals);
 
     // Weight count
     document.getElementById('weight-count').textContent = weights.length;
