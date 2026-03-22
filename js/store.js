@@ -816,7 +816,7 @@ const Store = (() => {
     // Convert from kg to target
     if (toUnit === 'kg') return Math.round(kg * 10) / 10;
     if (toUnit === 'lbs') return Math.round(kg / 0.453592 * 10) / 10;
-    if (toUnit === 'st') return Math.round(kg / 6.35029 * 100) / 100;
+    if (toUnit === 'st') return Math.round(kg / 6.35029 * 10000) / 10000;
     return value;
   }
 
@@ -907,15 +907,22 @@ const Store = (() => {
     // BMI calculation (height in cm)
     let bmi = null;
     if (profile.height) {
-      let heightM = parseFloat(profile.height) / 100;
+      var rawHeight = parseFloat(profile.height);
+      // If heightUnit is 'ft' but height is stored in cm (should be), use as-is.
+      // If height looks like raw feet (< 10), convert to cm.
+      if (Number.isFinite(rawHeight) && rawHeight > 0 && rawHeight < 10 && profile.heightUnit === 'ft') {
+        // Stored as feet (legacy fallback) — don't use, too imprecise
+        rawHeight = null;
+      }
+      var heightM = rawHeight ? rawHeight / 100 : 0;
       let weightKg = currentW;
       if (settings.weightUnit === 'lbs') {
         weightKg = currentW * 0.453592;
       } else if (settings.weightUnit === 'st') {
         weightKg = currentW * 6.35029;
       }
-      if (Number.isFinite(heightM) && heightM > 0) {
-        bmi = weightKg / (heightM * heightM);
+      if (Number.isFinite(heightM) && heightM > 0.5 && Number.isFinite(weightKg) && weightKg > 0) {
+        bmi = Math.round(weightKg / (heightM * heightM) * 10) / 10;
       }
     }
 

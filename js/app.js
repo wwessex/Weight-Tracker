@@ -1052,15 +1052,19 @@ const App = (() => {
   })();
 
   // ===== ANIMATION HELPERS =====
+  var _animationId = 0;
   function animateValue(el, end, duration, suffix, decimals) {
     if (!el || end === null || end === undefined || isNaN(end)) return;
     duration = duration || 600;
     suffix = suffix || '';
+    var myId = ++_animationId;
+    el._animId = myId;
     const start = 0;
     const range = parseFloat(end) - start;
     const isInt = Number.isInteger(parseFloat(end));
     const startTime = performance.now();
     function update(now) {
+      if (el._animId !== myId) return;
       const elapsed = now - startTime;
       const progress = Math.min(elapsed / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
@@ -1236,11 +1240,13 @@ const App = (() => {
     if (!el) return;
     if (value != null) {
       if (useStoneFormat) {
+        el._animId = ++_animationId;
         el.textContent = Store.formatStone(value);
       } else {
         animateValue(el, value, 600, suffix || '', decimals);
       }
     } else {
+      el._animId = ++_animationId;
       el.textContent = fallback !== undefined ? fallback : '--';
     }
   }
@@ -2015,7 +2021,11 @@ const App = (() => {
     displayStat('sum-current', stats.currentWeight || null, ' ' + unit, undefined, sumDecimals, isSt);
     displayStat('sum-to-goal', stats.weightToGo, ' ' + unit, undefined, sumDecimals, isSt);
     displayStat('sum-pct-lost', stats.percentBodyWeightLost > 0 ? stats.percentBodyWeightLost : null, '%');
-    displayStat('sum-bmi', stats.bmi || null, '');
+    var bmiEl = document.getElementById('sum-bmi');
+    if (bmiEl) {
+      bmiEl._animId = ++_animationId;
+      bmiEl.textContent = (stats.bmi && Number.isFinite(stats.bmi)) ? stats.bmi.toFixed(1) : '--';
+    }
 
     // Projected goal date
     const projDate = Store.getProjectedGoalDate();
