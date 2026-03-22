@@ -370,6 +370,25 @@ const App = (() => {
     refreshSettings();
   }
 
+  function getActivePage() {
+    const activePage = document.querySelector('.page.active');
+    if (!activePage || !activePage.id) return 'summary';
+    return activePage.id.replace('page-', '');
+  }
+
+  function refreshActivePageWithStats() {
+    const activePage = getActivePage();
+    const refreshers = { summary: refreshSummary, doses: refreshDoses, progress: refreshProgress, journal: refreshJournal, settings: refreshSettings };
+
+    refreshSummary();
+    refreshProgress();
+
+    // Summary/progress have already been refreshed above.
+    if (activePage !== 'summary' && activePage !== 'progress' && refreshers[activePage]) {
+      refreshers[activePage]();
+    }
+  }
+
   function teardownReminderChecks() {
     if (remindersInterval) {
       clearInterval(remindersInterval);
@@ -3907,6 +3926,7 @@ const App = (() => {
     checkReminders({ source: 'settings-save' });
     scheduleReminderChecks();
     ensureBackgroundReminderScheduling();
+    refreshActivePageWithStats();
     toast('Settings saved!', 'success');
   }
 
