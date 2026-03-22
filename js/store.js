@@ -799,6 +799,7 @@ const Store = (() => {
     if (typeof merged.lastReminderCheckAt === 'undefined') {
       merged.lastReminderCheckAt = null;
     }
+    _invalidateCache();
     return set(KEYS.SETTINGS, merged);
   }
 
