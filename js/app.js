@@ -2047,10 +2047,31 @@ const App = (() => {
     displayStat('sum-total-doses', stats.totalJabs > 0 ? stats.totalJabs : null, '', '0');
     const isSt = unit === 'st';
     const sumDecimals = isSt ? 2 : 1;
-    displayStat('sum-weight-lost', stats.totalLost || null, ' ' + unit, undefined, sumDecimals, isSt);
-    displayStat('sum-current', stats.currentWeight || null, ' ' + unit, undefined, sumDecimals, isSt);
-    displayStat('sum-to-goal', stats.weightToGo, ' ' + unit, undefined, sumDecimals, isSt);
-    displayStat('sum-pct-lost', stats.percentBodyWeightLost > 0 ? stats.percentBodyWeightLost : null, '%');
+    displayStat(
+      'sum-weight-lost',
+      Number.isFinite(stats.totalLost) ? stats.totalLost : null,
+      ' ' + unit,
+      undefined,
+      sumDecimals,
+      isSt
+    );
+    displayStat(
+      'sum-current',
+      Number.isFinite(stats.currentWeight) ? stats.currentWeight : null,
+      ' ' + unit,
+      undefined,
+      sumDecimals,
+      isSt
+    );
+    displayStat(
+      'sum-to-goal',
+      Number.isFinite(stats.weightToGo) ? stats.weightToGo : null,
+      ' ' + unit,
+      undefined,
+      sumDecimals,
+      isSt
+    );
+    displayStat('sum-pct-lost', Number.isFinite(stats.percentBodyWeightLost) ? stats.percentBodyWeightLost : null, '%');
     var bmiEl = document.getElementById('sum-bmi');
     if (bmiEl) {
       bmiEl._animId = ++_animationId;
@@ -2886,12 +2907,47 @@ const App = (() => {
     // Stats with animated counters
     const progIsSt = unit === 'st';
     const progDecimals = progIsSt ? 2 : 1;
-    displayStat('prog-current', stats.currentWeight || null, ' ' + unit, undefined, progDecimals, progIsSt);
-    displayStat('prog-start', stats.startWeight || null, ' ' + unit, undefined, progDecimals, progIsSt);
-    displayStat('prog-total-lost', stats.totalLost || null, ' ' + unit, undefined, progDecimals, progIsSt);
-    displayStat('prog-pct-lost', stats.percentBodyWeightLost > 0 ? stats.percentBodyWeightLost : null, '%');
-    displayStat('prog-to-goal', stats.weightToGo, ' ' + unit, undefined, progDecimals, progIsSt);
-    displayStat('prog-weekly-avg', stats.avgWeeklyLoss || null, ' ' + unit, undefined, progDecimals, progIsSt);
+    displayStat(
+      'prog-current',
+      Number.isFinite(stats.currentWeight) ? stats.currentWeight : null,
+      ' ' + unit,
+      undefined,
+      progDecimals,
+      progIsSt
+    );
+    displayStat(
+      'prog-start',
+      Number.isFinite(stats.startWeight) ? stats.startWeight : null,
+      ' ' + unit,
+      undefined,
+      progDecimals,
+      progIsSt
+    );
+    displayStat(
+      'prog-total-lost',
+      Number.isFinite(stats.totalLost) ? stats.totalLost : null,
+      ' ' + unit,
+      undefined,
+      progDecimals,
+      progIsSt
+    );
+    displayStat('prog-pct-lost', Number.isFinite(stats.percentBodyWeightLost) ? stats.percentBodyWeightLost : null, '%');
+    displayStat(
+      'prog-to-goal',
+      Number.isFinite(stats.weightToGo) ? stats.weightToGo : null,
+      ' ' + unit,
+      undefined,
+      progDecimals,
+      progIsSt
+    );
+    displayStat(
+      'prog-weekly-avg',
+      Number.isFinite(stats.avgWeeklyLoss) ? stats.avgWeeklyLoss : null,
+      ' ' + unit,
+      undefined,
+      progDecimals,
+      progIsSt
+    );
 
     // Weight count
     document.getElementById('weight-count').textContent = weights.length;
