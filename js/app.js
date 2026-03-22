@@ -1218,8 +1218,38 @@ const App = (() => {
 
   var _chartDataHashes = {};
 
-  function chartDataHash(key, data) {
-    var hash = data.length + ':' + (data.length > 0 ? data[data.length - 1].date || data[data.length - 1].id || '' : '');
+  function chartDataHash(key, data, fields) {
+    var length = Array.isArray(data) ? data.length : 0;
+    var firstDate = '';
+    var lastDate = '';
+    var checksum = 2166136261; // FNV-1a 32-bit offset basis
+    var includeFields = Array.isArray(fields) && fields.length > 0 ? fields : ['id'];
+
+    function updateChecksum(value) {
+      var str = value == null ? '' : String(value);
+      for (var i = 0; i < str.length; i++) {
+        checksum ^= str.charCodeAt(i);
+        checksum = Math.imul(checksum, 16777619);
+      }
+      // Field separator to avoid accidental collisions across concatenated values
+      checksum ^= 124;
+      checksum = Math.imul(checksum, 16777619);
+    }
+
+    if (length > 0) {
+      firstDate = data[0] && data[0].date ? String(data[0].date) : '';
+      lastDate = data[length - 1] && data[length - 1].date ? String(data[length - 1].date) : '';
+
+      for (var idx = 0; idx < length; idx++) {
+        var row = data[idx] || {};
+        for (var fieldIdx = 0; fieldIdx < includeFields.length; fieldIdx++) {
+          var field = includeFields[fieldIdx];
+          updateChecksum(row[field]);
+        }
+      }
+    }
+
+    var hash = length + ':' + firstDate + ':' + lastDate + ':' + (checksum >>> 0).toString(16);
     if (_chartDataHashes[key] === hash) return true; // unchanged
     _chartDataHashes[key] = hash;
     return false; // changed
@@ -2518,7 +2548,7 @@ const App = (() => {
   }
 
   function renderDoseChart(jabs) {
-    if (doseChart && chartDataHash('doses', jabs)) return;
+    if (doseChart && chartDataHash('doses', jabs, ['date', 'dose', 'doseUnit', 'medication'])) return;
     const colors = getChartColors();
     doseChart = destroyChart(doseChart);
     const ctx = document.getElementById('chart-doses').getContext('2d');
@@ -2936,7 +2966,7 @@ const App = (() => {
   }
 
   function renderWeightFullChart(weights) {
-    if (weightFullChart && chartDataHash('weightFull', weights)) return;
+    if (weightFullChart && chartDataHash('weightFull', weights, ['date', 'weight'])) return;
     const colors = getChartColors();
     const goals = Store.getGoals();
 
@@ -3968,7 +3998,7 @@ const App = (() => {
   }
 
   function renderMeasurementChart(measurements) {
-    if (measurementChart && chartDataHash('measurements', measurements)) return;
+    if (measurementChart && chartDataHash('measurements', measurements, ['date', 'waist', 'hips', 'chest'])) return;
     const colors = getChartColors();
     measurementChart = destroyChart(measurementChart);
     const ctx = document.getElementById('chart-measurements').getContext('2d');
