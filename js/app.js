@@ -2094,7 +2094,7 @@ const App = (() => {
     var bmiEl = document.getElementById('sum-bmi');
     if (bmiEl) {
       bmiEl._animId = ++_animationId;
-      bmiEl.textContent = (stats.bmi && Number.isFinite(stats.bmi)) ? stats.bmi.toFixed(1) : '--';
+      bmiEl.textContent = Number.isFinite(stats.bmi) ? stats.bmi.toFixed(1) : '--';
     }
 
     // Projected goal date
