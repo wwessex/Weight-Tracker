@@ -17,6 +17,7 @@ const App = (() => {
   const REMINDER_CHECK_INTERVAL_MS = 30 * 60 * 1000;
   const REMINDER_CATCH_UP_INTERVAL_MS = 2 * 60 * 60 * 1000;
   const DOSAGE_DRAFT_KEY = 'shotsy_dosage_draft';
+  let settingsHeightDraft = null;
 
   // ===== UTILITIES =====
   function escapeHtml(str) {
@@ -3302,7 +3303,11 @@ const App = (() => {
     // Settings height unit toggle (cm ↔ feet/inches)
     document.getElementById('set-height-unit').addEventListener('change', function () {
       updateSettingsHeightUnitUi();
+      setSettingsHeightDraft();
     });
+    document.getElementById('set-height').addEventListener('input', setSettingsHeightDraft);
+    document.getElementById('set-height-ft').addEventListener('input', setSettingsHeightDraft);
+    document.getElementById('set-height-in').addEventListener('input', setSettingsHeightDraft);
 
     // Live theme preview in settings
     document.getElementById('set-theme').addEventListener('change', (e) => {
@@ -3597,6 +3602,15 @@ const App = (() => {
     }
   }
 
+  function setSettingsHeightDraft() {
+    settingsHeightDraft = {
+      cm: document.getElementById('set-height').value,
+      unit: document.getElementById('set-height-unit').value,
+      ft: document.getElementById('set-height-ft').value,
+      inch: document.getElementById('set-height-in').value
+    };
+  }
+
   function saveAllSettings() {
     const profile = Store.getProfile();
     profile.name = document.getElementById('set-name').value.trim();
@@ -3609,6 +3623,7 @@ const App = (() => {
       profile.height = document.getElementById('set-height').value;
     }
     profile.heightUnit = heightUnit;
+    settingsHeightDraft = null;
     profile.startWeight = document.getElementById('set-start-weight').value;
     profile.medication = document.getElementById('set-medication').value;
     profile.dosage = document.getElementById('set-dosage').value;
@@ -3662,23 +3677,30 @@ const App = (() => {
 
     document.getElementById('set-name').value = profile.name || '';
     // Height is always stored in cm internally
-    document.getElementById('set-height').value = profile.height || '';
-    document.getElementById('set-height-unit').value = profile.heightUnit || 'cm';
-    // Pre-populate feet/inches from stored cm value
-    var storedCm = parseFloat(profile.height);
-    if (Number.isFinite(storedCm) && storedCm > 0) {
-      var totalIn = storedCm / 2.54;
-      var ftVal = Math.floor(totalIn / 12);
-      var inVal = Math.round(totalIn % 12);
-      if (inVal === 12) { ftVal++; inVal = 0; }
-      document.getElementById('set-height-ft').value = ftVal;
-      document.getElementById('set-height-in').value = inVal;
+    if (settingsHeightDraft) {
+      document.getElementById('set-height').value = settingsHeightDraft.cm || '';
+      document.getElementById('set-height-unit').value = settingsHeightDraft.unit || 'cm';
+      document.getElementById('set-height-ft').value = settingsHeightDraft.ft || '';
+      document.getElementById('set-height-in').value = settingsHeightDraft.inch || '';
     } else {
-      document.getElementById('set-height-ft').value = '';
-      document.getElementById('set-height-in').value = '';
+      document.getElementById('set-height').value = profile.height || '';
+      document.getElementById('set-height-unit').value = profile.heightUnit || 'cm';
+      // Pre-populate feet/inches from stored cm value
+      var storedCm = parseFloat(profile.height);
+      if (Number.isFinite(storedCm) && storedCm > 0) {
+        var totalIn = storedCm / 2.54;
+        var ftVal = Math.floor(totalIn / 12);
+        var inVal = Math.round(totalIn % 12);
+        if (inVal === 12) { ftVal++; inVal = 0; }
+        document.getElementById('set-height-ft').value = ftVal;
+        document.getElementById('set-height-in').value = inVal;
+      } else {
+        document.getElementById('set-height-ft').value = '';
+        document.getElementById('set-height-in').value = '';
+      }
     }
     // Show/hide correct input group
-    var isImp = (profile.heightUnit || 'cm') === 'ft';
+    var isImp = document.getElementById('set-height-unit').value === 'ft';
     document.getElementById('set-height-cm-group').style.display = isImp ? 'none' : '';
     document.getElementById('set-height-imperial-group').style.display = isImp ? '' : 'none';
     document.getElementById('set-start-weight').value = profile.startWeight || '';
