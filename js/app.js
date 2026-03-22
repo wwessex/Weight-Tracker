@@ -278,7 +278,7 @@ const App = (() => {
       var profile = {
         name: name,
         height: Number.isFinite(normalizedHeightCm) ? normalizedHeightCm.toFixed(1) : '',
-        heightUnit: 'cm',
+        heightUnit: obHeightUnit,
         startWeight: document.getElementById('ob-weight').value,
         startDate: new Date().toISOString().split('T')[0],
         medication: document.getElementById('ob-medication').value,
@@ -2898,9 +2898,6 @@ const App = (() => {
     const profile = Store.getProfile();
     if (profile.height) {
       let heightM = parseFloat(profile.height) / 100;
-      if (profile.heightUnit === 'ft') {
-        heightM = parseFloat(profile.height) * 0.3048;
-      }
       if (heightM > 0) {
         let healthyLow = 18.5 * heightM * heightM;
         let healthyHigh = 25 * heightM * heightM;
