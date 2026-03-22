@@ -880,7 +880,9 @@ const Store = (() => {
     }
 
     const current = weights[weights.length - 1];
-    const start = profile.startWeight ? parseFloat(profile.startWeight) : parseFloat(weights[0].weight);
+    const firstWeight = parseFloat(weights[0].weight);
+    const profileStartWeight = parseFloat(profile.startWeight);
+    const start = Number.isFinite(profileStartWeight) ? profileStartWeight : firstWeight;
     const currentW = parseFloat(current.weight);
     const totalLost = start - currentW;
 
@@ -894,7 +896,9 @@ const Store = (() => {
       } else if (settings.weightUnit === 'st') {
         weightKg = currentW * 6.35029;
       }
-      bmi = weightKg / (heightM * heightM);
+      if (Number.isFinite(heightM) && heightM > 0) {
+        bmi = weightKg / (heightM * heightM);
+      }
     }
 
     // Changes over time
@@ -933,12 +937,14 @@ const Store = (() => {
 
     // Days on plan
     const startDate = parseLocalDate(profile.startDate || weights[0].date);
-    const daysOnPlan = startDate ? Math.round((now - startDate) / (1000 * 60 * 60 * 24)) : 0;
+    const daysOnPlanRaw = startDate ? Math.round((now - startDate) / (1000 * 60 * 60 * 24)) : 0;
+    const daysOnPlan = Math.max(0, daysOnPlanRaw);
 
     // Progress toward goal
-    const targetWeight = goals.targetWeight ? parseFloat(goals.targetWeight) : null;
-    const weightToGo = targetWeight ? currentW - targetWeight : null;
-    const totalToLose = targetWeight ? start - targetWeight : null;
+    const parsedTargetWeight = parseFloat(goals.targetWeight);
+    const targetWeight = Number.isFinite(parsedTargetWeight) ? parsedTargetWeight : null;
+    const weightToGo = targetWeight !== null ? currentW - targetWeight : null;
+    const totalToLose = targetWeight !== null ? start - targetWeight : null;
     const progressPercent = totalToLose && totalToLose > 0 ? Math.min(100, Math.max(0, (totalLost / totalToLose) * 100)) : 0;
     const percentBodyWeightLost = start > 0 ? (totalLost / start) * 100 : 0;
 
@@ -1065,16 +1071,14 @@ const Store = (() => {
 
     if (!stats.startWeight || !stats.currentWeight) return milestones;
 
-    const totalLostKg = stats.totalLost;
+    const totalLost = stats.totalLost;
     const unit = stats.unit;
-    const lostLbs = unit === 'lbs' ? totalLostKg : (unit === 'st' ? totalLostKg * 14 : totalLostKg * 2.20462);
-    const lostInUnit = totalLostKg;
-    const pctLost = stats.startWeight > 0 ? (totalLostKg / stats.startWeight) * 100 : 0;
+    const pctLost = stats.startWeight > 0 ? (totalLost / stats.startWeight) * 100 : 0;
 
-    // First 5 lbs / 2.3 kg / 0.36 st
-    const first5Threshold = unit === 'lbs' ? 5 : (unit === 'st' ? 0.5 : 2);
-    if (lostInUnit >= first5Threshold) {
-      milestones.push({ key: 'first5', label: unit === 'lbs' ? 'First 5 lbs lost!' : (unit === 'st' ? 'First 0.5 st lost!' : 'First 2 kg lost!'), icon: '5' });
+    // First 5 lbs equivalent by active unit.
+    const first5Threshold = unit === 'lbs' ? 5 : (unit === 'st' ? 0.36 : 2.27);
+    if (totalLost >= first5Threshold) {
+      milestones.push({ key: 'first5', label: unit === 'lbs' ? 'First 5 lbs lost!' : (unit === 'st' ? 'First 0.36 st lost!' : 'First 2.3 kg lost!'), icon: '5' });
     }
 
     // 10% body weight
