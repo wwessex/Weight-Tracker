@@ -878,7 +878,22 @@ const Store = (() => {
   }
 
   function stLbsToDecimal(st, lbs) {
-    return (parseFloat(st) || 0) + (parseFloat(lbs) || 0) / 14;
+    const stRaw = String(st == null ? '' : st).trim();
+    const lbsRaw = String(lbs == null ? '' : lbs).trim();
+    const pounds = parseFloat(lbsRaw);
+
+    // If pounds are explicitly provided, trust st + lbs fields.
+    if (lbsRaw !== '' && Number.isFinite(pounds)) {
+      return (parseFloat(stRaw) || 0) + (pounds / 14);
+    }
+
+    // If only stone is provided and it uses dotted shorthand (e.g., 20.9),
+    // interpret it as 20st 9lbs for backwards/user compatibility.
+    if (stRaw.includes('.')) {
+      return normalizeStoneValue(stRaw);
+    }
+
+    return parseFloat(stRaw) || 0;
   }
 
   function decimalToStLbs(decimal) {
