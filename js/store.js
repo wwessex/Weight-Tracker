@@ -842,6 +842,24 @@ const Store = (() => {
     }
   }
 
+  // Stone + pounds helpers
+  function stLbsToDecimal(st, lbs) {
+    return (parseFloat(st) || 0) + (parseFloat(lbs) || 0) / 14;
+  }
+
+  function decimalToStLbs(decimal) {
+    var totalLbs = Math.round(parseFloat(decimal) * 14);
+    var st = Math.floor(totalLbs / 14);
+    var lbs = totalLbs % 14;
+    return { st: st, lbs: lbs };
+  }
+
+  function formatStone(val) {
+    if (val === null || val === undefined || isNaN(val)) return '--';
+    var parts = decimalToStLbs(parseFloat(val));
+    return parts.st + 'st ' + parts.lbs + 'lbs';
+  }
+
   // Stats helpers
   function getStats() {
     if (_statsCache && _statsCacheVersion === _cacheVersion) return _statsCache;
@@ -1078,7 +1096,7 @@ const Store = (() => {
     // First 5 lbs equivalent by active unit.
     const first5Threshold = unit === 'lbs' ? 5 : (unit === 'st' ? 0.36 : 2.27);
     if (totalLost >= first5Threshold) {
-      milestones.push({ key: 'first5', label: unit === 'lbs' ? 'First 5 lbs lost!' : (unit === 'st' ? 'First 0.36 st lost!' : 'First 2.3 kg lost!'), icon: '5' });
+      milestones.push({ key: 'first5', label: unit === 'lbs' ? 'First 5 lbs lost!' : (unit === 'st' ? 'First 5 lbs lost!' : 'First 2.3 kg lost!'), icon: '5' });
     }
 
     // 10% body weight
@@ -1964,6 +1982,7 @@ const Store = (() => {
     getMovingAverage, getRateOfLoss, getNextRecommendedSite,
     getPeriodSummary, calculateGoalDate, getDoseWeightCorrelation,
     convertWeight, convertAllWeights,
+    stLbsToDecimal, decimalToStLbs, formatStone,
     exportData, exportCSV, importData,
     exportEncryptedBackup, importBackupData,
     getBackupSizeInfo,

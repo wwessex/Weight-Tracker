@@ -276,11 +276,27 @@ const App = (() => {
         }
       }
 
+      var selectedUnit = getActiveObWeightUnit();
+      var startWeight, targetWeight;
+      if (selectedUnit === 'st') {
+        startWeight = Store.stLbsToDecimal(
+          document.getElementById('ob-weight-st').value,
+          document.getElementById('ob-weight-lbs').value
+        );
+        targetWeight = Store.stLbsToDecimal(
+          document.getElementById('ob-target-st').value,
+          document.getElementById('ob-target-lbs').value
+        );
+      } else {
+        startWeight = document.getElementById('ob-weight').value;
+        targetWeight = document.getElementById('ob-target').value;
+      }
+
       var profile = {
         name: name,
         height: Number.isFinite(normalizedHeightCm) ? normalizedHeightCm.toFixed(1) : '',
         heightUnit: obHeightUnit,
-        startWeight: document.getElementById('ob-weight').value,
+        startWeight: startWeight,
         startDate: new Date().toISOString().split('T')[0],
         medication: document.getElementById('ob-medication').value,
         dosage: '',
@@ -289,10 +305,10 @@ const App = (() => {
       };
       Store.saveProfile(profile);
       Store.saveSettings(Object.assign({}, Store.getSettings(), {
-        weightUnit: document.getElementById('ob-weight-unit').value
+        weightUnit: selectedUnit
       }));
       Store.saveGoals(Object.assign({}, Store.getGoals(), {
-        targetWeight: document.getElementById('ob-target').value
+        targetWeight: targetWeight
       }));
       Store.addWeight({
         date: profile.startDate,
@@ -581,18 +597,33 @@ const App = (() => {
       element.style.display = message ? '' : 'none';
     }
 
+    function getActiveObWeightUnit() {
+      var isSt = document.getElementById('ob-weight-st-row').style.display !== 'none';
+      return isSt ? document.getElementById('ob-weight-unit-st').value : obWeightUnit.value;
+    }
+
     function updateWeightUnitUi() {
-      document.querySelectorAll('.ob-weight-unit-label').forEach(function (el) { el.textContent = obWeightUnit.value; });
-      var unitLimits = {
-        kg: { min: 0.1, max: 500 },
-        lbs: { min: 0.1, max: 1100 },
-        st: { min: 0.1, max: 80 }
-      };
-      var limits = unitLimits[obWeightUnit.value] || unitLimits.kg;
-      obWeightInput.min = String(limits.min);
-      obWeightInput.max = String(limits.max);
-      obTargetInput.min = '0';
-      obTargetInput.max = String(limits.max);
+      var unit = getActiveObWeightUnit();
+      var isSt = unit === 'st';
+      document.querySelectorAll('.ob-weight-unit-label').forEach(function (el) { el.textContent = unit; });
+      // Toggle stone vs decimal rows
+      document.getElementById('ob-weight-decimal-row').style.display = isSt ? 'none' : '';
+      document.getElementById('ob-weight-st-row').style.display = isSt ? '' : 'none';
+      document.getElementById('ob-target-decimal-group').style.display = isSt ? 'none' : '';
+      document.getElementById('ob-target-st-group').style.display = isSt ? '' : 'none';
+      obWeightInput.required = !isSt;
+      obTargetInput.required = !isSt;
+      if (!isSt) {
+        var unitLimits = {
+          kg: { min: 0.1, max: 500 },
+          lbs: { min: 0.1, max: 1100 },
+        };
+        var limits = unitLimits[unit] || unitLimits.kg;
+        obWeightInput.min = String(limits.min);
+        obWeightInput.max = String(limits.max);
+        obTargetInput.min = '0';
+        obTargetInput.max = String(limits.max);
+      }
     }
 
     function updateHeightUnitUi() {
@@ -641,6 +672,14 @@ const App = (() => {
       setInlineMessage(obWeightWarning, '');
     });
 
+    document.getElementById('ob-weight-unit-st').addEventListener('change', function () {
+      // Sync with the main unit selector when switching away from stones
+      obWeightUnit.value = this.value;
+      updateWeightUnitUi();
+      setInlineMessage(obTargetValidation, '');
+      setInlineMessage(obWeightWarning, '');
+    });
+
     obHeightUnit.addEventListener('change', function () {
       updateHeightUnitUi();
     });
@@ -661,8 +700,21 @@ const App = (() => {
         return;
       }
 
-      var startWeight = parseFloat(obWeightInput.value);
-      var targetWeight = parseFloat(obTargetInput.value);
+      var selectedUnit = getActiveObWeightUnit();
+      var startWeight, targetWeight;
+      if (selectedUnit === 'st') {
+        startWeight = Store.stLbsToDecimal(
+          document.getElementById('ob-weight-st').value,
+          document.getElementById('ob-weight-lbs').value
+        );
+        targetWeight = Store.stLbsToDecimal(
+          document.getElementById('ob-target-st').value,
+          document.getElementById('ob-target-lbs').value
+        );
+      } else {
+        startWeight = parseFloat(obWeightInput.value);
+        targetWeight = parseFloat(obTargetInput.value);
+      }
       if (!Number.isFinite(targetWeight) || targetWeight < 0) {
         setInlineMessage(obTargetValidation, 'Goal weight must be 0 or greater.');
         return;
@@ -678,7 +730,7 @@ const App = (() => {
         name: document.getElementById('ob-name').value.trim(),
         height: normalizedHeight.value,
         heightUnit: 'cm',
-        startWeight: obWeightInput.value,
+        startWeight: startWeight,
         startDate: formatLocalDate(new Date()),
         medication: document.getElementById('ob-medication').value,
         dosage: '',
@@ -687,10 +739,9 @@ const App = (() => {
       };
       Store.saveProfile(profile);
 
-      var weightUnit = obWeightUnit.value;
-      Store.saveSettings({ ...Store.getSettings(), weightUnit });
+      Store.saveSettings({ ...Store.getSettings(), weightUnit: selectedUnit });
 
-      Store.saveGoals({ ...Store.getGoals(), targetWeight: obTargetInput.value });
+      Store.saveGoals({ ...Store.getGoals(), targetWeight: targetWeight });
 
       Store.addWeight({
         date: profile.startDate,
@@ -1039,11 +1090,14 @@ const App = (() => {
   function formatWeight(val) {
     const unit = Store.getSettings().weightUnit;
     if (val === null || val === undefined || isNaN(val)) return '--';
+    if (unit === 'st') return Store.formatStone(val);
     return parseFloat(val).toFixed(1) + ' ' + unit;
   }
 
   function formatWeightShort(val) {
+    const unit = Store.getSettings().weightUnit;
     if (val === null || val === undefined || isNaN(val)) return '--';
+    if (unit === 'st') return Store.formatStone(val);
     return parseFloat(val).toFixed(1);
   }
 
@@ -1177,11 +1231,15 @@ const App = (() => {
   }
 
   // Animate a stat value or show a fallback placeholder
-  function displayStat(id, value, suffix, fallback, decimals) {
+  function displayStat(id, value, suffix, fallback, decimals, useStoneFormat) {
     const el = document.getElementById(id);
     if (!el) return;
     if (value != null) {
-      animateValue(el, value, 600, suffix || '', decimals);
+      if (useStoneFormat) {
+        el.textContent = Store.formatStone(value);
+      } else {
+        animateValue(el, value, 600, suffix || '', decimals);
+      }
     } else {
       el.textContent = fallback !== undefined ? fallback : '--';
     }
@@ -1951,10 +2009,11 @@ const App = (() => {
 
     // Stats grid with animated counters
     displayStat('sum-total-doses', stats.totalJabs > 0 ? stats.totalJabs : null, '', '0');
-    const sumDecimals = unit === 'st' ? 2 : 1;
-    displayStat('sum-weight-lost', stats.totalLost || null, ' ' + unit, undefined, sumDecimals);
-    displayStat('sum-current', stats.currentWeight || null, ' ' + unit, undefined, sumDecimals);
-    displayStat('sum-to-goal', stats.weightToGo, ' ' + unit, undefined, sumDecimals);
+    const isSt = unit === 'st';
+    const sumDecimals = isSt ? 2 : 1;
+    displayStat('sum-weight-lost', stats.totalLost || null, ' ' + unit, undefined, sumDecimals, isSt);
+    displayStat('sum-current', stats.currentWeight || null, ' ' + unit, undefined, sumDecimals, isSt);
+    displayStat('sum-to-goal', stats.weightToGo, ' ' + unit, undefined, sumDecimals, isSt);
     displayStat('sum-pct-lost', stats.percentBodyWeightLost > 0 ? stats.percentBodyWeightLost : null, '%');
     displayStat('sum-bmi', stats.bmi || null, '');
 
@@ -2003,7 +2062,8 @@ const App = (() => {
       if (val === null || val === undefined) return { text: '--', cls: '' };
       const sign = val > 0 ? '+' : '';
       const cls = val < 0 ? 'loss' : val > 0 ? 'gain' : '';
-      return { text: sign + val.toFixed(1) + ' ' + unit, cls };
+      const text = unit === 'st' ? sign + Store.formatStone(Math.abs(val)) : sign + val.toFixed(1) + ' ' + unit;
+      return { text, cls };
     }
 
     const weekWeight = formatChange(stats.weightChange7d);
@@ -2287,7 +2347,10 @@ const App = (() => {
             borderWidth: 1,
             displayColors: false,
             callbacks: {
-              label: (c) => c.dataset.label + ': ' + c.parsed.y.toFixed(1) + ' ' + Store.getSettings().weightUnit,
+              label: (c) => {
+                const u = Store.getSettings().weightUnit;
+                return c.dataset.label + ': ' + (u === 'st' ? Store.formatStone(c.parsed.y) : c.parsed.y.toFixed(1) + ' ' + u);
+              },
             },
           }),
         },
@@ -2628,9 +2691,19 @@ const App = (() => {
 
     const weightModal = bindModal('weight-modal', ['weight-modal-close', 'weight-form-cancel'], 'weight-form', () => {
       const id = document.getElementById('weight-edit-id').value;
+      const unit = Store.getSettings().weightUnit;
+      let weightVal;
+      if (unit === 'st') {
+        weightVal = Store.stLbsToDecimal(
+          document.getElementById('weight-st').value,
+          document.getElementById('weight-lbs').value
+        );
+      } else {
+        weightVal = document.getElementById('weight-value').value;
+      }
       const entry = {
         date: document.getElementById('weight-date').value,
-        weight: document.getElementById('weight-value').value,
+        weight: weightVal,
         note: document.getElementById('weight-note').value,
       };
       if (id) {
@@ -2722,6 +2795,14 @@ const App = (() => {
 
   function openWeightModal(id) {
     const modal = document.getElementById('weight-modal');
+    const unit = Store.getSettings().weightUnit;
+    const isSt = unit === 'st';
+
+    // Toggle input visibility
+    document.getElementById('weight-decimal-group').style.display = isSt ? 'none' : '';
+    document.getElementById('weight-st-group').style.display = isSt ? '' : 'none';
+    // Manage required attributes
+    document.getElementById('weight-value').required = !isSt;
 
     if (id) {
       const weights = Store.getWeights();
@@ -2730,13 +2811,21 @@ const App = (() => {
       document.getElementById('weight-edit-id').value = id;
       document.getElementById('weight-modal-title').textContent = 'Edit Weight';
       document.getElementById('weight-date').value = w.date;
-      document.getElementById('weight-value').value = w.weight;
+      if (isSt) {
+        var parts = Store.decimalToStLbs(w.weight);
+        document.getElementById('weight-st').value = parts.st;
+        document.getElementById('weight-lbs').value = parts.lbs;
+      } else {
+        document.getElementById('weight-value').value = w.weight;
+      }
       document.getElementById('weight-note').value = w.note || '';
     } else {
       document.getElementById('weight-edit-id').value = '';
       document.getElementById('weight-modal-title').textContent = 'Log Weight';
       document.getElementById('weight-date').value = formatLocalDate(new Date());
       document.getElementById('weight-value').value = '';
+      document.getElementById('weight-st').value = '';
+      document.getElementById('weight-lbs').value = '';
       document.getElementById('weight-note').value = '';
     }
     openModal(modal);
@@ -2755,13 +2844,14 @@ const App = (() => {
     updateWeightUnitLabels();
 
     // Stats with animated counters
-    const progDecimals = unit === 'st' ? 2 : 1;
-    displayStat('prog-current', stats.currentWeight || null, ' ' + unit, undefined, progDecimals);
-    displayStat('prog-start', stats.startWeight || null, ' ' + unit, undefined, progDecimals);
-    displayStat('prog-total-lost', stats.totalLost || null, ' ' + unit, undefined, progDecimals);
+    const progIsSt = unit === 'st';
+    const progDecimals = progIsSt ? 2 : 1;
+    displayStat('prog-current', stats.currentWeight || null, ' ' + unit, undefined, progDecimals, progIsSt);
+    displayStat('prog-start', stats.startWeight || null, ' ' + unit, undefined, progDecimals, progIsSt);
+    displayStat('prog-total-lost', stats.totalLost || null, ' ' + unit, undefined, progDecimals, progIsSt);
     displayStat('prog-pct-lost', stats.percentBodyWeightLost > 0 ? stats.percentBodyWeightLost : null, '%');
-    displayStat('prog-to-goal', stats.weightToGo, ' ' + unit, undefined, progDecimals);
-    displayStat('prog-weekly-avg', stats.avgWeeklyLoss || null, ' ' + unit, undefined, progDecimals);
+    displayStat('prog-to-goal', stats.weightToGo, ' ' + unit, undefined, progDecimals, progIsSt);
+    displayStat('prog-weekly-avg', stats.avgWeeklyLoss || null, ' ' + unit, undefined, progDecimals, progIsSt);
 
     // Weight count
     document.getElementById('weight-count').textContent = weights.length;
@@ -2949,7 +3039,10 @@ const App = (() => {
             displayColors: false,
             filter: (item) => !item.dataset.label.startsWith('Healthy'),
             callbacks: {
-              label: (c) => c.dataset.label + ': ' + c.parsed.y.toFixed(1) + ' ' + Store.getSettings().weightUnit,
+              label: (c) => {
+                const u = Store.getSettings().weightUnit;
+                return c.dataset.label + ': ' + (u === 'st' ? Store.formatStone(c.parsed.y) : c.parsed.y.toFixed(1) + ' ' + u);
+              },
             },
           }),
         },
@@ -2990,13 +3083,21 @@ const App = (() => {
         const diff = parseFloat(w.weight) - parseFloat(allWeights[globalIdx - 1].weight);
         const sign = diff > 0 ? '+' : '';
         const cls = diff > 0 ? 'gain' : diff < 0 ? 'loss' : 'neutral';
-        changeHtml = `<span class="weight-item-change ${cls}">${sign}${diff.toFixed(1)}</span>`;
+        let diffDisplay;
+        if (unit === 'st') {
+          const diffLbs = Math.round(Math.abs(diff) * 14);
+          diffDisplay = (diff > 0 ? '+' : '-') + diffLbs + 'lbs';
+        } else {
+          diffDisplay = sign + diff.toFixed(1);
+        }
+        changeHtml = `<span class="weight-item-change ${cls}">${diffDisplay}</span>`;
       }
+      const weightDisplay = unit === 'st' ? Store.formatStone(w.weight) : parseFloat(w.weight).toFixed(1) + ' ' + unit;
       return `
         <div class="weight-item">
           <div class="weight-item-info">
             <div class="weight-item-date">${formatDateShort(w.date)} ${w.note ? '&middot; ' + escapeHtml(w.note) : ''}</div>
-            <div class="weight-item-value">${parseFloat(w.weight).toFixed(1)} ${unit} ${changeHtml}</div>
+            <div class="weight-item-value">${weightDisplay} ${changeHtml}</div>
           </div>
           <div style="display:flex;gap:4px;">
             <button class="btn btn-ghost btn-sm" data-action="edit-weight" data-id="${escapeHtml(w.id)}" aria-label="Edit weight entry">Edit</button>
@@ -3571,6 +3672,35 @@ const App = (() => {
     }
   }
 
+  function updateSettingsWeightFields(unit, startWeight, goalWeight) {
+    var isSt = unit === 'st';
+    document.getElementById('set-start-decimal-group').style.display = isSt ? 'none' : '';
+    document.getElementById('set-start-st-group').style.display = isSt ? '' : 'none';
+    document.getElementById('set-goal-decimal-group').style.display = isSt ? 'none' : '';
+    document.getElementById('set-goal-st-group').style.display = isSt ? '' : 'none';
+    if (isSt) {
+      if (startWeight) {
+        var sp = Store.decimalToStLbs(startWeight);
+        document.getElementById('set-start-st').value = sp.st;
+        document.getElementById('set-start-lbs').value = sp.lbs;
+      } else {
+        document.getElementById('set-start-st').value = '';
+        document.getElementById('set-start-lbs').value = '';
+      }
+      if (goalWeight) {
+        var gp = Store.decimalToStLbs(goalWeight);
+        document.getElementById('set-goal-st').value = gp.st;
+        document.getElementById('set-goal-lbs').value = gp.lbs;
+      } else {
+        document.getElementById('set-goal-st').value = '';
+        document.getElementById('set-goal-lbs').value = '';
+      }
+    } else {
+      document.getElementById('set-start-weight').value = startWeight || '';
+      document.getElementById('set-goal-weight').value = goalWeight || '';
+    }
+  }
+
   function updateSettingsHeightUnitUi() {
     var unit = document.getElementById('set-height-unit').value;
     var cmGroup = document.getElementById('set-height-cm-group');
@@ -3624,7 +3754,15 @@ const App = (() => {
     }
     profile.heightUnit = heightUnit;
     settingsHeightDraft = null;
-    profile.startWeight = document.getElementById('set-start-weight').value;
+    var currentUnit = Store.getSettings().weightUnit;
+    if (currentUnit === 'st') {
+      profile.startWeight = Store.stLbsToDecimal(
+        document.getElementById('set-start-st').value,
+        document.getElementById('set-start-lbs').value
+      );
+    } else {
+      profile.startWeight = document.getElementById('set-start-weight').value;
+    }
     profile.medication = document.getElementById('set-medication').value;
     profile.dosage = document.getElementById('set-dosage').value;
     profile.frequency = document.getElementById('set-frequency').value;
@@ -3632,7 +3770,14 @@ const App = (() => {
     clearDosageDraft();
 
     const goals = Store.getGoals();
-    goals.targetWeight = document.getElementById('set-goal-weight').value;
+    if (currentUnit === 'st') {
+      goals.targetWeight = Store.stLbsToDecimal(
+        document.getElementById('set-goal-st').value,
+        document.getElementById('set-goal-lbs').value
+      );
+    } else {
+      goals.targetWeight = document.getElementById('set-goal-weight').value;
+    }
     Store.saveGoals(goals);
 
     const settings = Store.getSettings();
@@ -3651,9 +3796,8 @@ const App = (() => {
       Store.convertAllWeights(oldUnit, newUnit);
       // Update display values
       const newProfile = Store.getProfile();
-      document.getElementById('set-start-weight').value = newProfile.startWeight || '';
       const newGoals = Store.getGoals();
-      document.getElementById('set-goal-weight').value = newGoals.targetWeight || '';
+      updateSettingsWeightFields(newUnit, newProfile.startWeight, newGoals.targetWeight);
       toast('All weights converted to ' + newUnit + '!', 'success');
     }
 
@@ -3703,9 +3847,8 @@ const App = (() => {
     var isImp = document.getElementById('set-height-unit').value === 'ft';
     document.getElementById('set-height-cm-group').style.display = isImp ? 'none' : '';
     document.getElementById('set-height-imperial-group').style.display = isImp ? '' : 'none';
-    document.getElementById('set-start-weight').value = profile.startWeight || '';
-    document.getElementById('set-goal-weight').value = goals.targetWeight || '';
     document.getElementById('set-weight-unit').value = settings.weightUnit || 'kg';
+    updateSettingsWeightFields(settings.weightUnit, profile.startWeight, goals.targetWeight);
     document.getElementById('set-medication').value = profile.medication || 'semaglutide';
     const dosageDraft = getDosageDraft();
     document.getElementById('set-dosage').value = dosageDraft || profile.dosage || '';
@@ -4337,7 +4480,14 @@ const App = (() => {
 
     function formatChange(val) {
       if (!val) return '0';
+      if (unit === 'st') return (val > 0 ? '+' : '') + Store.formatStone(val);
       return (val > 0 ? '+' : '') + val;
+    }
+
+    function fmtWt(val) {
+      if (val === null || val === undefined || !val) return '--';
+      if (unit === 'st') return Store.formatStone(val);
+      return parseFloat(val).toFixed(1) + ' ' + unit;
     }
 
     let html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Doctor Visit Report - ' + report.reportDate + '</title>';
@@ -4376,23 +4526,23 @@ const App = (() => {
     }
     html += '<tr><th>Height</th><td>' + heightDisplay + '</td><th>Start Date</th><td>' + (report.patient.startDate || '--') + '</td></tr>';
     html += '<tr><th>Medication</th><td>' + medName + '</td><th>Dosage</th><td>' + (report.patient.dosage || '--') + '</td></tr>';
-    html += '<tr><th>Frequency</th><td>' + (report.patient.frequency || '--') + '</td><th>Target Weight</th><td>' + (report.weightSummary.targetWeight ? report.weightSummary.targetWeight + ' ' + unit : '--') + '</td></tr></table>';
+    html += '<tr><th>Frequency</th><td>' + (report.patient.frequency || '--') + '</td><th>Target Weight</th><td>' + fmtWt(report.weightSummary.targetWeight) + '</td></tr></table>';
 
     // Weight summary
     html += '<h2>Weight Summary</h2>';
     html += '<div class="stats-grid">';
-    html += '<div class="stat-box"><div class="stat-value">' + (report.weightSummary.currentWeight ? report.weightSummary.currentWeight.toFixed(1) : '--') + ' ' + unit + '</div><div class="stat-label">Current Weight</div></div>';
-    html += '<div class="stat-box"><div class="stat-value">' + (report.weightSummary.totalLost || 0) + ' ' + unit + '</div><div class="stat-label">Total Lost</div></div>';
+    html += '<div class="stat-box"><div class="stat-value">' + fmtWt(report.weightSummary.currentWeight) + '</div><div class="stat-label">Current Weight</div></div>';
+    html += '<div class="stat-box"><div class="stat-value">' + fmtWt(report.weightSummary.totalLost) + '</div><div class="stat-label">Total Lost</div></div>';
     html += '<div class="stat-box"><div class="stat-value">' + (report.weightSummary.bmi || '--') + '</div><div class="stat-label">BMI</div></div>';
     html += '</div>';
     html += '<div class="stats-grid">';
-    html += '<div class="stat-box"><div class="stat-value">' + formatChange(report.weightSummary.weightChange7d) + ' ' + unit + '</div><div class="stat-label">7-Day Change</div></div>';
-    html += '<div class="stat-box"><div class="stat-value">' + formatChange(report.weightSummary.weightChange30d) + ' ' + unit + '</div><div class="stat-label">30-Day Change</div></div>';
-    html += '<div class="stat-box"><div class="stat-value">' + (report.weightSummary.rateOfLoss !== null ? report.weightSummary.rateOfLoss : '--') + ' ' + unit + '/wk</div><div class="stat-label">Rate of Loss (90d)</div></div>';
+    html += '<div class="stat-box"><div class="stat-value">' + formatChange(report.weightSummary.weightChange7d) + '</div><div class="stat-label">7-Day Change</div></div>';
+    html += '<div class="stat-box"><div class="stat-value">' + formatChange(report.weightSummary.weightChange30d) + '</div><div class="stat-label">30-Day Change</div></div>';
+    html += '<div class="stat-box"><div class="stat-value">' + (report.weightSummary.rateOfLoss !== null ? fmtWt(report.weightSummary.rateOfLoss) + '/wk' : '--') + '</div><div class="stat-label">Rate of Loss (90d)</div></div>';
     html += '</div>';
     html += '<div class="stats-grid">';
-    html += '<div class="stat-box"><div class="stat-value">' + (report.weightSummary.startWeight ? report.weightSummary.startWeight.toFixed(1) : '--') + ' ' + unit + '</div><div class="stat-label">Start Weight</div></div>';
-    html += '<div class="stat-box"><div class="stat-value">' + (report.weightSummary.avgWeeklyLoss || '--') + ' ' + unit + '/wk</div><div class="stat-label">Avg Weekly Loss</div></div>';
+    html += '<div class="stat-box"><div class="stat-value">' + fmtWt(report.weightSummary.startWeight) + '</div><div class="stat-label">Start Weight</div></div>';
+    html += '<div class="stat-box"><div class="stat-value">' + (report.weightSummary.avgWeeklyLoss ? fmtWt(report.weightSummary.avgWeeklyLoss) + '/wk' : '--') + '</div><div class="stat-label">Avg Weekly Loss</div></div>';
     html += '<div class="stat-box"><div class="stat-value">' + report.weightSummary.progressPercent + '%</div><div class="stat-label">Goal Progress</div>';
     if (report.weightSummary.projectedGoalDate) {
       html += '<div class="stat-sub">Est. ' + report.weightSummary.projectedGoalDate + '</div>';

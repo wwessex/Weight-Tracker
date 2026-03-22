@@ -360,7 +360,7 @@
             </div>
           </div>
           <p id="ob-height-validation" class="form-help" style="display:none;color:#dc2626;"></p>
-          <div class="form-row">
+          <div class="form-row" id="ob-weight-decimal-row">
             <div class="form-group">
               <label for="ob-weight">Starting Weight (<span class="ob-weight-unit-label">kg</span>)</label>
               <input type="number" id="ob-weight" placeholder="85" step="0.1" min="0.1" max="500" required>
@@ -374,11 +374,39 @@
               </select>
             </div>
           </div>
+          <div id="ob-weight-st-row" class="form-row" style="display:none;">
+            <div class="form-group">
+              <label for="ob-weight-st">Starting Weight (st)</label>
+              <input type="number" id="ob-weight-st" step="1" min="0" max="80" placeholder="0">
+            </div>
+            <div class="form-group">
+              <label for="ob-weight-lbs">lbs</label>
+              <input type="number" id="ob-weight-lbs" step="1" min="0" max="13" placeholder="0">
+            </div>
+            <div class="form-group">
+              <label for="ob-weight-unit-st">Unit</label>
+              <select id="ob-weight-unit-st">
+                <option value="kg">Kilograms (kg)</option>
+                <option value="lbs">Pounds (lbs)</option>
+                <option value="st" selected>Stone (st)</option>
+              </select>
+            </div>
+          </div>
           <p id="ob-weight-warning" class="form-help" style="display:none;color:#b45309;"></p>
-          <div class="form-group">
+          <div class="form-group" id="ob-target-decimal-group">
             <label for="ob-target">Goal Weight (<span class="ob-weight-unit-label">kg</span>)</label>
             <input type="number" id="ob-target" placeholder="70" step="0.1" min="0" max="500" required>
             <p id="ob-target-validation" class="form-help" style="display:none;color:#dc2626;"></p>
+          </div>
+          <div id="ob-target-st-group" class="form-row" style="display:none;">
+            <div class="form-group">
+              <label for="ob-target-st">Goal Weight (st)</label>
+              <input type="number" id="ob-target-st" step="1" min="0" max="80" placeholder="0">
+            </div>
+            <div class="form-group">
+              <label for="ob-target-lbs">lbs</label>
+              <input type="number" id="ob-target-lbs" step="1" min="0" max="13" placeholder="0">
+            </div>
           </div>
           <div class="form-group">
             <label for="ob-medication">Medication</label>
@@ -954,13 +982,33 @@
       <div class="settings-section">
         <h3 class="settings-section-title">Weight Goals</h3>
         <div class="settings-card">
-          <div class="form-group">
+          <div class="form-group" id="set-start-decimal-group">
             <label for="set-start-weight">Start Weight</label>
             <input type="number" id="set-start-weight" step="0.1">
           </div>
-          <div class="form-group">
+          <div id="set-start-st-group" class="form-row" style="display:none;">
+            <div class="form-group">
+              <label for="set-start-st">Start Weight (st)</label>
+              <input type="number" id="set-start-st" step="1" min="0" max="80" placeholder="0">
+            </div>
+            <div class="form-group">
+              <label for="set-start-lbs">lbs</label>
+              <input type="number" id="set-start-lbs" step="1" min="0" max="13" placeholder="0">
+            </div>
+          </div>
+          <div class="form-group" id="set-goal-decimal-group">
             <label for="set-goal-weight">Goal Weight</label>
             <input type="number" id="set-goal-weight" step="0.1">
+          </div>
+          <div id="set-goal-st-group" class="form-row" style="display:none;">
+            <div class="form-group">
+              <label for="set-goal-st">Goal Weight (st)</label>
+              <input type="number" id="set-goal-st" step="1" min="0" max="80" placeholder="0">
+            </div>
+            <div class="form-group">
+              <label for="set-goal-lbs">lbs</label>
+              <input type="number" id="set-goal-lbs" step="1" min="0" max="13" placeholder="0">
+            </div>
           </div>
           <div class="form-group">
             <label for="set-weight-unit">Weight Unit</label>
@@ -1440,9 +1488,19 @@
             <label for="weight-date">Date</label>
             <input type="date" id="weight-date" required>
           </div>
-          <div class="form-group">
+          <div class="form-group" id="weight-decimal-group">
             <label for="weight-value">Weight (<span class="weight-unit-label">kg</span>)</label>
             <input type="number" id="weight-value" step="0.1" placeholder="Enter weight" required>
+          </div>
+          <div id="weight-st-group" class="form-row" style="display:none;">
+            <div class="form-group">
+              <label for="weight-st">Stone</label>
+              <input type="number" id="weight-st" step="1" min="0" max="80" placeholder="0">
+            </div>
+            <div class="form-group">
+              <label for="weight-lbs">Pounds</label>
+              <input type="number" id="weight-lbs" step="1" min="0" max="13" placeholder="0">
+            </div>
           </div>
           <div class="form-group">
             <label for="weight-note">Notes (optional)</label>
