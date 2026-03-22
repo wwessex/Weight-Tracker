@@ -948,12 +948,51 @@ const Store = (() => {
       return emptyResult;
     }
 
-    const current = weights[weights.length - 1];
-    const firstWeight = settings.weightUnit === 'st' ? normalizeStoneValue(weights[0].weight) : parseFloat(weights[0].weight);
+    const parsedWeights = weights.map((entry) => {
+      const parsed = settings.weightUnit === 'st'
+        ? normalizeStoneValue(entry.weight)
+        : parseFloat(entry.weight);
+      return {
+        entry,
+        value: Number.isFinite(parsed) ? parsed : null,
+      };
+    }).filter((item) => item.value !== null);
+
+    if (parsedWeights.length === 0) {
+      const emptyParsedResult = {
+        currentWeight: null,
+        startWeight: null,
+        totalLost: null,
+        bmi: null,
+        weightChange7d: 0,
+        weightChange30d: 0,
+        avgWeeklyLoss: 0,
+        streak: 0,
+        totalEntries: 0,
+        totalJabs: jabs.length,
+        lastJabDate: jabs.length > 0 ? jabs[jabs.length - 1].date : null,
+        lastJabTime: jabs.length > 0 ? jabs[jabs.length - 1].time : null,
+        nextJabDate: null,
+        nextJabDateTime: null,
+        daysOnPlan: 0,
+        targetWeight: goals.targetWeight || null,
+        weightToGo: null,
+        progressPercent: 0,
+        percentBodyWeightLost: 0,
+        unit: settings.weightUnit,
+      };
+      _statsCache = emptyParsedResult;
+      _statsCacheVersion = _cacheVersion;
+      return emptyParsedResult;
+    }
+
+    const firstWeight = parsedWeights[0].value;
+    const currentParsed = parsedWeights[parsedWeights.length - 1];
+    const current = currentParsed.entry;
+    const currentW = currentParsed.value;
     const profileStartWeight = settings.weightUnit === 'st' ? normalizeStoneValue(profile.startWeight) : parseFloat(profile.startWeight);
     const start = Number.isFinite(profileStartWeight) ? profileStartWeight : firstWeight;
-    const currentW = settings.weightUnit === 'st' ? normalizeStoneValue(current.weight) : parseFloat(current.weight);
-    const totalLost = start - currentW;
+    const totalLost = Number.isFinite(start) && Number.isFinite(currentW) ? start - currentW : null;
 
     // BMI calculation (height in cm)
     let bmi = null;
@@ -987,13 +1026,19 @@ const Store = (() => {
     const weight7dAgo = weights.filter(w => w._localDate <= d7).pop();
     const weight30dAgo = weights.filter(w => w._localDate <= d30).pop();
 
-    const weightChange7d = weight7dAgo ? currentW - parseFloat(weight7dAgo.weight) : 0;
-    const weightChange30d = weight30dAgo ? currentW - parseFloat(weight30dAgo.weight) : 0;
+    const parsedWeight7d = weight7dAgo
+      ? (settings.weightUnit === 'st' ? normalizeStoneValue(weight7dAgo.weight) : parseFloat(weight7dAgo.weight))
+      : null;
+    const parsedWeight30d = weight30dAgo
+      ? (settings.weightUnit === 'st' ? normalizeStoneValue(weight30dAgo.weight) : parseFloat(weight30dAgo.weight))
+      : null;
+    const weightChange7d = Number.isFinite(parsedWeight7d) ? currentW - parsedWeight7d : 0;
+    const weightChange30d = Number.isFinite(parsedWeight30d) ? currentW - parsedWeight30d : 0;
 
     // Average weekly loss
     const daysDiff = (current._localDate - weights[0]._localDate) / (1000 * 60 * 60 * 24);
     const weeks = daysDiff / 7;
-    const avgWeeklyLoss = weeks > 0 ? totalLost / weeks : 0;
+    const avgWeeklyLoss = weeks > 0 && Number.isFinite(totalLost) ? totalLost / weeks : 0;
 
     // Streak: consecutive weeks with weight entries
     let streak = 0;
@@ -1021,8 +1066,10 @@ const Store = (() => {
     const targetWeight = Number.isFinite(parsedTargetWeight) ? parsedTargetWeight : null;
     const weightToGo = targetWeight !== null ? currentW - targetWeight : null;
     const totalToLose = targetWeight !== null ? start - targetWeight : null;
-    const progressPercent = totalToLose && totalToLose > 0 ? Math.min(100, Math.max(0, (totalLost / totalToLose) * 100)) : 0;
-    const percentBodyWeightLost = start > 0 ? (totalLost / start) * 100 : 0;
+    const progressPercent = Number.isFinite(totalLost) && totalToLose && totalToLose > 0
+      ? Math.min(100, Math.max(0, (totalLost / totalToLose) * 100))
+      : 0;
+    const percentBodyWeightLost = Number.isFinite(totalLost) && start > 0 ? (totalLost / start) * 100 : 0;
 
     // Next jab date
     let nextJabDate = null;
