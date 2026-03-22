@@ -888,9 +888,6 @@ const Store = (() => {
     let bmi = null;
     if (profile.height) {
       let heightM = parseFloat(profile.height) / 100;
-      if (profile.heightUnit === 'ft') {
-        heightM = parseFloat(profile.height) * 0.3048;
-      }
       let weightKg = currentW;
       if (settings.weightUnit === 'lbs') {
         weightKg = currentW * 0.453592;
