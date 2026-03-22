@@ -843,6 +843,40 @@ const Store = (() => {
   }
 
   // Stone + pounds helpers
+  function normalizeStoneValue(value) {
+    const parsed = parseFloat(value);
+    if (!Number.isFinite(parsed)) return parsed;
+
+    const raw = String(value == null ? '' : value).trim();
+    const match = raw.match(/^(-?\d+)(?:\.(\d+))?$/);
+    if (!match || !match[2]) return parsed;
+
+    const whole = parseInt(match[1], 10);
+    const frac = match[2];
+
+    // Legacy shorthand support:
+    // 20.9  => 20st 9lbs
+    // 20.10 => 20st 10lbs
+    // 20.30 => 20st 3lbs (common trailing-zero entry)
+    if (frac.length === 1) {
+      return whole + (parseInt(frac, 10) / 14);
+    }
+    if (frac.length === 2) {
+      const pounds = parseInt(frac, 10);
+      if (pounds <= 13) {
+        return whole + (pounds / 14);
+      }
+      if (frac.endsWith('0')) {
+        const tens = parseInt(frac[0], 10);
+        if (tens <= 13) {
+          return whole + (tens / 14);
+        }
+      }
+    }
+
+    return parsed;
+  }
+
   function stLbsToDecimal(st, lbs) {
     return (parseFloat(st) || 0) + (parseFloat(lbs) || 0) / 14;
   }
@@ -856,7 +890,8 @@ const Store = (() => {
 
   function formatStone(val) {
     if (val === null || val === undefined || isNaN(val)) return '--';
-    var parts = decimalToStLbs(parseFloat(val));
+    var normalized = normalizeStoneValue(val);
+    var parts = decimalToStLbs(parseFloat(normalized));
     return parts.st + 'st ' + parts.lbs + 'lbs';
   }
 
@@ -898,10 +933,10 @@ const Store = (() => {
     }
 
     const current = weights[weights.length - 1];
-    const firstWeight = parseFloat(weights[0].weight);
-    const profileStartWeight = parseFloat(profile.startWeight);
+    const firstWeight = settings.weightUnit === 'st' ? normalizeStoneValue(weights[0].weight) : parseFloat(weights[0].weight);
+    const profileStartWeight = settings.weightUnit === 'st' ? normalizeStoneValue(profile.startWeight) : parseFloat(profile.startWeight);
     const start = Number.isFinite(profileStartWeight) ? profileStartWeight : firstWeight;
-    const currentW = parseFloat(current.weight);
+    const currentW = settings.weightUnit === 'st' ? normalizeStoneValue(current.weight) : parseFloat(current.weight);
     const totalLost = start - currentW;
 
     // BMI calculation (height in cm)
@@ -966,7 +1001,7 @@ const Store = (() => {
     const daysOnPlan = Math.max(0, daysOnPlanRaw);
 
     // Progress toward goal
-    const parsedTargetWeight = parseFloat(goals.targetWeight);
+    const parsedTargetWeight = settings.weightUnit === 'st' ? normalizeStoneValue(goals.targetWeight) : parseFloat(goals.targetWeight);
     const targetWeight = Number.isFinite(parsedTargetWeight) ? parsedTargetWeight : null;
     const weightToGo = targetWeight !== null ? currentW - targetWeight : null;
     const totalToLose = targetWeight !== null ? start - targetWeight : null;
