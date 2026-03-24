@@ -2140,7 +2140,7 @@ const App = (() => {
 
     function formatChange(val) {
       if (val === null || val === undefined) return { text: '--', cls: '' };
-      const sign = val > 0 ? '+' : '';
+      const sign = val > 0 ? '+' : val < 0 ? '-' : '';
       const cls = val < 0 ? 'loss' : val > 0 ? 'gain' : '';
       const text = unit === 'st' ? sign + Store.formatStone(Math.abs(val)) : sign + val.toFixed(1) + ' ' + unit;
       return { text, cls };

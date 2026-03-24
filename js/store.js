@@ -1299,6 +1299,11 @@ const Store = (() => {
 
   // Moving average calculation (windowDays default 28 = 4 weeks)
   // Optimized O(n) sliding window instead of O(n²) nested filter
+  function parseWeight(value) {
+    var unit = getSettings().weightUnit;
+    return unit === 'st' ? normalizeStoneValue(value) : parseFloat(value);
+  }
+
   function getMovingAverage(windowDays) {
     windowDays = windowDays || 28;
     if (_movingAvgCacheVersion === _cacheVersion && _movingAvgCache[windowDays]) {
@@ -1314,12 +1319,12 @@ const Store = (() => {
 
     for (let i = 0; i < weights.length; i++) {
       const endTime = weights[i]._localDate.getTime();
-      const val = parseFloat(weights[i].weight);
+      const val = parseWeight(weights[i].weight);
       windowSum += val;
       windowCount++;
 
       while (windowStart < i && (endTime - weights[windowStart]._localDate.getTime()) > windowMs) {
-        windowSum -= parseFloat(weights[windowStart].weight);
+        windowSum -= parseWeight(weights[windowStart].weight);
         windowCount--;
         windowStart++;
       }
@@ -1383,13 +1388,13 @@ const Store = (() => {
 
       if (before.length < 2 || after.length < 2) return;
 
-      const bFirst = parseFloat(before[0].weight);
-      const bLast = parseFloat(before[before.length - 1].weight);
+      const bFirst = parseWeight(before[0].weight);
+      const bLast = parseWeight(before[before.length - 1].weight);
       const bDays = (before[before.length - 1]._localDate - before[0]._localDate) / (1000 * 60 * 60 * 24);
       const rateBefore = bDays > 0 ? Math.round(((bFirst - bLast) / bDays) * 7 * 10) / 10 : 0;
 
-      const aFirst = parseFloat(after[0].weight);
-      const aLast = parseFloat(after[after.length - 1].weight);
+      const aFirst = parseWeight(after[0].weight);
+      const aLast = parseWeight(after[after.length - 1].weight);
       const aDays = (after[after.length - 1]._localDate - after[0]._localDate) / (1000 * 60 * 60 * 24);
       const rateAfter = aDays > 0 ? Math.round(((aFirst - aLast) / aDays) * 7 * 10) / 10 : 0;
 
@@ -1418,8 +1423,8 @@ const Store = (() => {
     cutoff.setDate(cutoff.getDate() - (periodDays || 30));
     const periodWeights = weights.filter(w => w._localDate >= cutoff);
     if (periodWeights.length < 2) return null;
-    const first = parseFloat(periodWeights[0].weight);
-    const last = parseFloat(periodWeights[periodWeights.length - 1].weight);
+    const first = parseWeight(periodWeights[0].weight);
+    const last = parseWeight(periodWeights[periodWeights.length - 1].weight);
     const days = (periodWeights[periodWeights.length - 1]._localDate - periodWeights[0]._localDate) / (1000 * 60 * 60 * 24);
     if (days === 0) return null;
     const weeklyRate = ((first - last) / days) * 7;
