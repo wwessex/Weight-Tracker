@@ -1053,8 +1053,10 @@ const App = (() => {
       fastingTimerInterval = null;
     }
 
+    const validPages = ['summary', 'doses', 'progress', 'journal', 'settings'];
+    if (validPages.indexOf(page) === -1) return;
     const refreshers = { summary: refreshSummary, doses: refreshDoses, progress: refreshProgress, journal: refreshJournal, settings: refreshSettings };
-    if (refreshers[page]) refreshers[page]();
+    refreshers[page]();
   }
 
   function handleHashChange() {
