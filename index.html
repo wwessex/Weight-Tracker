@@ -1035,9 +1035,18 @@
               <option value="none">No Medication</option>
             </select>
           </div>
-          <div class="form-group">
-            <label for="set-dosage">Current Dosage</label>
-            <input type="text" id="set-dosage" placeholder="e.g. 0.25 mg">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="set-dosage">Current Dosage</label>
+              <input type="number" id="set-dosage" step="0.01" placeholder="0.25">
+            </div>
+            <div class="form-group">
+              <label for="set-dose-unit">Unit</label>
+              <select id="set-dose-unit">
+                <option value="mg">mg</option>
+                <option value="ml">ml</option>
+              </select>
+            </div>
           </div>
           <div class="form-group">
             <label for="set-frequency">Frequency</label>
