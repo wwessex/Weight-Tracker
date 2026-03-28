@@ -215,7 +215,7 @@ const Store = (() => {
     const shouldInvalidate = !!(options && options.invalidateCache);
     const validateFn = (options && options.validate) || null;
 
-    function getAll() { return get(key) || []; }
+    function getAll() { return (get(key) || []).sort(sortFn); }
     function saveAll(items) {
       if (shouldInvalidate) _invalidateCache();
       return set(key, items);
