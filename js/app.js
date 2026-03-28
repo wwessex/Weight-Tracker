@@ -1720,6 +1720,31 @@ const App = (() => {
     showReminderBanner(type, message);
   }
 
+  async function clearNotificationsForType(type) {
+    // Dismiss native/SW notifications with matching tag
+    if ('serviceWorker' in navigator) {
+      try {
+        var registration = await navigator.serviceWorker.ready;
+        if (registration && registration.getNotifications) {
+          var notifications = await registration.getNotifications({ tag: type });
+          notifications.forEach(function(n) { n.close(); });
+        }
+      } catch (e) { /* ignore — not all browsers support getNotifications */ }
+    }
+    // Remove in-app reminder banners of this type
+    var container = document.getElementById('reminder-banners');
+    if (container) {
+      container.querySelectorAll('.reminder-banner.' + type).forEach(function(b) { b.remove(); });
+    }
+    // Reset dedup key so next checkReminders() re-evaluates cleanly
+    var ref = getReminderDedupState();
+    if (ref.dedup[type]) {
+      delete ref.dedup[type];
+      ref.settings.reminderDedup = ref.dedup;
+      Store.saveSettings(ref.settings);
+    }
+  }
+
   function getReminderDedupState() {
     const settings = Store.getSettings();
     if (!settings.reminderDedup || typeof settings.reminderDedup !== 'object') {
@@ -1946,6 +1971,8 @@ const App = (() => {
       toast('Missed dose logged', 'success');
       refreshSummary();
       refreshDoses();
+      clearNotificationsForType('dose');
+      checkReminders();
     });
   }
 
@@ -2491,6 +2518,8 @@ const App = (() => {
       closeModal(doseModal);
       refreshDoses();
       refreshSummary();
+      clearNotificationsForType('dose');
+      checkReminders();
     });
 
     initFilterChips('dose-filters', (range) => {
@@ -2800,6 +2829,8 @@ const App = (() => {
       closeModal(weightModal);
       refreshProgress();
       refreshSummary();
+      clearNotificationsForType('weighin');
+      checkReminders();
     });
 
     initFilterChips('progress-filters', (range) => {
