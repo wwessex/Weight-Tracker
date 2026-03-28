@@ -238,6 +238,10 @@ const Store = (() => {
       const idx = items.findIndex(item => item.id === id);
       if (idx !== -1) {
         items[idx] = { ...items[idx], ...updates };
+        if (validateFn) {
+          var error = validateFn(items[idx]);
+          if (error) return { success: false, error: error };
+        }
         items.sort(sortFn);
         saveAll(items);
       }
@@ -454,7 +458,20 @@ const Store = (() => {
   const addVictory = victoryCol.add;
   const deleteVictory = victoryCol.remove;
 
-  const measurementCol = createCollection(KEYS.MEASUREMENTS, { invalidateCache: true });
+  const measurementCol = createCollection(KEYS.MEASUREMENTS, {
+    invalidateCache: true,
+    validate: function(entry) {
+      var fields = ['waist', 'hips', 'chest', 'neck', 'armLeft', 'armRight', 'thighLeft', 'thighRight'];
+      fields.forEach(function(f) {
+        if (entry[f] != null && entry[f] !== '') {
+          var v = parseFloat(entry[f]);
+          entry[f] = isNaN(v) ? null : v;
+        }
+      });
+      if (entry.date && !isValidDateString(entry.date)) return 'Invalid date format';
+      return null;
+    }
+  });
   const getMeasurements = measurementCol.getAll;
   const saveMeasurements = measurementCol.saveAll;
   const addMeasurement = measurementCol.add;

@@ -100,6 +100,12 @@ const App = (() => {
     }
   }
 
+  function parseOrNull(val) {
+    if (!val) return null;
+    var n = parseFloat(val);
+    return isNaN(n) ? null : n;
+  }
+
   function completeRestoreToSummary(successMessage, bannerMessage) {
     document.getElementById('onboarding-modal').style.display = 'none';
     document.getElementById('app').style.display = '';
@@ -314,8 +320,8 @@ const App = (() => {
           document.getElementById('ob-target-lbs').value
         );
       } else {
-        startWeight = document.getElementById('ob-weight').value;
-        targetWeight = document.getElementById('ob-target').value;
+        startWeight = parseFloat(document.getElementById('ob-weight').value);
+        targetWeight = parseFloat(document.getElementById('ob-target').value);
       }
 
       var profile = {
@@ -2515,14 +2521,18 @@ const App = (() => {
         date: document.getElementById('dose-date').value,
         time: document.getElementById('dose-time').value,
         medication: document.getElementById('dose-medication').value,
-        dose: document.getElementById('dose-amount').value,
+        dose: parseFloat(document.getElementById('dose-amount').value),
         doseUnit: document.getElementById('dose-unit').value,
         site: document.getElementById('dose-site').value,
         sideEffects,
         notes: document.getElementById('dose-notes').value,
       };
       if (id) {
-        Store.updateJab(id, entry);
+        var updateResult = Store.updateJab(id, entry);
+        if (updateResult && updateResult.success === false) {
+          toast(updateResult.error, 'error');
+          return;
+        }
         toast('Dose updated', 'success');
       } else {
         var result = Store.addJab(entry);
@@ -2837,7 +2847,7 @@ const App = (() => {
           document.getElementById('weight-lbs').value
         );
       } else {
-        weightVal = document.getElementById('weight-value').value;
+        weightVal = parseFloat(document.getElementById('weight-value').value);
       }
       const entry = {
         date: document.getElementById('weight-date').value,
@@ -2845,7 +2855,11 @@ const App = (() => {
         note: document.getElementById('weight-note').value,
       };
       if (id) {
-        Store.updateWeight(id, entry);
+        var updateResult = Store.updateWeight(id, entry);
+        if (updateResult && updateResult.success === false) {
+          toast(updateResult.error, 'error');
+          return;
+        }
         toast('Weight updated', 'success');
       } else {
         var result = Store.addWeight(entry);
@@ -2875,14 +2889,14 @@ const App = (() => {
       const id = document.getElementById('measurement-edit-id').value;
       const entry = {
         date: document.getElementById('measurement-date').value,
-        waist: document.getElementById('measurement-waist').value || null,
-        hips: document.getElementById('measurement-hips').value || null,
-        chest: document.getElementById('measurement-chest').value || null,
-        neck: document.getElementById('measurement-neck').value || null,
-        armLeft: document.getElementById('measurement-arm-left').value || null,
-        armRight: document.getElementById('measurement-arm-right').value || null,
-        thighLeft: document.getElementById('measurement-thigh-left').value || null,
-        thighRight: document.getElementById('measurement-thigh-right').value || null,
+        waist: parseOrNull(document.getElementById('measurement-waist').value),
+        hips: parseOrNull(document.getElementById('measurement-hips').value),
+        chest: parseOrNull(document.getElementById('measurement-chest').value),
+        neck: parseOrNull(document.getElementById('measurement-neck').value),
+        armLeft: parseOrNull(document.getElementById('measurement-arm-left').value),
+        armRight: parseOrNull(document.getElementById('measurement-arm-right').value),
+        thighLeft: parseOrNull(document.getElementById('measurement-thigh-left').value),
+        thighRight: parseOrNull(document.getElementById('measurement-thigh-right').value),
         note: document.getElementById('measurement-note').value,
       };
       if (id) {
@@ -3946,7 +3960,7 @@ const App = (() => {
         document.getElementById('set-start-lbs').value
       );
     } else {
-      profile.startWeight = document.getElementById('set-start-weight').value;
+      profile.startWeight = parseFloat(document.getElementById('set-start-weight').value);
     }
     profile.medication = document.getElementById('set-medication').value;
     profile.dosage = document.getElementById('set-dosage').value;
@@ -3963,7 +3977,7 @@ const App = (() => {
         document.getElementById('set-goal-lbs').value
       );
     } else {
-      goals.targetWeight = document.getElementById('set-goal-weight').value;
+      goals.targetWeight = parseFloat(document.getElementById('set-goal-weight').value);
     }
     Store.saveGoals(goals);
 
