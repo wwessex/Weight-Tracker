@@ -1025,6 +1025,11 @@ const App = (() => {
   }
 
   function navigateTo(page) {
+    const allowedPages = ['summary', 'doses', 'progress', 'journal', 'settings'];
+    if (!allowedPages.includes(page)) {
+      page = 'summary';
+    }
+
     // Clear countdown timer when leaving summary page
     if (countdownInterval) {
       clearInterval(countdownInterval);
@@ -1054,7 +1059,10 @@ const App = (() => {
     }
 
     const refreshers = { summary: refreshSummary, doses: refreshDoses, progress: refreshProgress, journal: refreshJournal, settings: refreshSettings };
-    if (refreshers[page]) refreshers[page]();
+    const refresher = refreshers[page];
+    if (typeof refresher === 'function') {
+      refresher();
+    }
   }
 
   function handleHashChange() {
