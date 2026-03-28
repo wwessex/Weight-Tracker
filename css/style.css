@@ -2610,6 +2610,205 @@ textarea:focus-visible {
   color: var(--success);
 }
 
+/* ===== Weekly Summary Card ===== */
+.weekly-summary-card {
+  background: var(--bg-card);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.weekly-summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.weekly-summary-dates {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.weekly-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  text-align: center;
+}
+.weekly-metric {
+  padding: 8px 4px;
+  background: var(--bg);
+  border-radius: 10px;
+}
+.weekly-metric-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.weekly-metric-value small {
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.weekly-metric-value.loss { color: var(--success); }
+.weekly-metric-value.gain { color: var(--danger); }
+.weekly-metric-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.weekly-cmp {
+  font-size: 0.65rem;
+  margin-left: 2px;
+}
+.weekly-cmp-good { color: var(--success); }
+.weekly-cmp-bad { color: var(--danger); }
+.weekly-summary-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+  gap: 8px;
+}
+
+/* ===== Insights Card ===== */
+.insights-card {
+  background: var(--bg-card);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.insights-header {
+  margin-bottom: 10px;
+}
+.insights-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.insight-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+.insight-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.insight-message {
+  color: var(--text);
+}
+.insight-positive {
+  background: var(--success-bg);
+}
+.insight-neutral {
+  background: var(--primary-bg);
+}
+.insight-alert {
+  background: var(--warning-bg);
+}
+
+/* ===== Velocity Card ===== */
+.velocity-card {
+  background: var(--bg-card);
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.velocity-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.velocity-icon {
+  font-size: 1.1rem;
+}
+#chart-velocity {
+  width: 100%;
+  max-height: 60px;
+}
+
+/* ===== Variability Note ===== */
+.variability-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  background: var(--primary-bg);
+  border-radius: 12px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.variability-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+/* ===== Monthly Comparison ===== */
+.monthly-comparison-card {
+  background: var(--bg-card);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.monthly-comparison-table {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.mc-row {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  min-height: 36px;
+}
+.mc-row:last-child {
+  border-bottom: none;
+}
+.mc-header {
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.mc-label {
+  flex: 0 0 80px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  padding: 6px 0;
+}
+.mc-cell {
+  flex: 1;
+  text-align: center;
+  font-size: 0.82rem;
+  padding: 6px 2px;
+  color: var(--text);
+}
+.mc-cell small {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+.mc-current {
+  font-weight: 600;
+  color: var(--primary);
+}
+.mc-best {
+  color: var(--success);
+  font-weight: 700;
+}
+
 /* Reduce motion for users who prefer it */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
