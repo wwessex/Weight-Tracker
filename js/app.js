@@ -17,6 +17,7 @@ const App = (() => {
   const REMINDER_CHECK_INTERVAL_MS = 30 * 60 * 1000;
   const REMINDER_CATCH_UP_INTERVAL_MS = 2 * 60 * 60 * 1000;
   const DOSAGE_DRAFT_KEY = 'shotsy_dosage_draft';
+  const DOSAGE_UNIT_DRAFT_KEY = 'shotsy_dosage_unit_draft';
   let settingsHeightDraft = null;
 
   // ===== UTILITIES =====
@@ -69,6 +70,31 @@ const App = (() => {
   function clearDosageDraft() {
     try {
       localStorage.removeItem(DOSAGE_DRAFT_KEY);
+    } catch {
+      // Best effort only.
+    }
+  }
+
+  function getDosageUnitDraft() {
+    try {
+      const value = localStorage.getItem(DOSAGE_UNIT_DRAFT_KEY);
+      return value === null ? '' : value;
+    } catch {
+      return '';
+    }
+  }
+
+  function setDosageUnitDraft(value) {
+    try {
+      localStorage.setItem(DOSAGE_UNIT_DRAFT_KEY, value || '');
+    } catch {
+      // Best effort only.
+    }
+  }
+
+  function clearDosageUnitDraft() {
+    try {
+      localStorage.removeItem(DOSAGE_UNIT_DRAFT_KEY);
     } catch {
       // Best effort only.
     }
@@ -2511,6 +2537,9 @@ const App = (() => {
       if (entry.dose) {
         prof.dosage = String(entry.dose);
       }
+      if (entry.doseUnit) {
+        prof.doseUnit = entry.doseUnit;
+      }
       if (entry.medication) {
         prof.medication = entry.medication;
       }
@@ -2555,7 +2584,7 @@ const App = (() => {
       document.getElementById('dose-time').value = new Date().toTimeString().slice(0, 5);
       document.getElementById('dose-medication').value = profile.medication || 'semaglutide';
       document.getElementById('dose-amount').value = profile.dosage ? parseFloat(profile.dosage) || '' : '';
-      document.getElementById('dose-unit').value = 'mg';
+      document.getElementById('dose-unit').value = profile.doseUnit || 'mg';
       // Pre-select recommended site
       const siteRec = Store.getNextRecommendedSite();
       document.getElementById('dose-site').value = siteRec.recommended || '';
@@ -3543,6 +3572,16 @@ const App = (() => {
       setDosageInput.addEventListener('input', persistDosageDraft);
       setDosageInput.addEventListener('change', persistDosageDraft);
     }
+    const setDoseUnitInput = document.getElementById('set-dose-unit');
+    if (setDoseUnitInput) {
+      const persistDoseUnitDraft = () => {
+        setDosageUnitDraft(setDoseUnitInput.value);
+        const profile = Store.getProfile();
+        profile.doseUnit = setDoseUnitInput.value;
+        Store.saveProfile(profile);
+      };
+      setDoseUnitInput.addEventListener('change', persistDoseUnitDraft);
+    }
 
     // Doctor visit report
     document.getElementById('btn-doctor-report').addEventListener('click', generateDoctorReport);
@@ -3911,9 +3950,11 @@ const App = (() => {
     }
     profile.medication = document.getElementById('set-medication').value;
     profile.dosage = document.getElementById('set-dosage').value;
+    profile.doseUnit = document.getElementById('set-dose-unit').value;
     profile.frequency = document.getElementById('set-frequency').value;
     Store.saveProfile(profile);
     clearDosageDraft();
+    clearDosageUnitDraft();
 
     const goals = Store.getGoals();
     if (currentUnit === 'st') {
@@ -3998,7 +4039,9 @@ const App = (() => {
     updateSettingsWeightFields(settings.weightUnit, profile.startWeight, goals.targetWeight);
     document.getElementById('set-medication').value = profile.medication || 'semaglutide';
     const dosageDraft = getDosageDraft();
+    const doseUnitDraft = getDosageUnitDraft();
     document.getElementById('set-dosage').value = dosageDraft || profile.dosage || '';
+    document.getElementById('set-dose-unit').value = doseUnitDraft || profile.doseUnit || 'mg';
     document.getElementById('set-frequency').value = profile.frequency || 'weekly';
     document.getElementById('set-theme').value = settings.theme || 'light';
     document.getElementById('set-weigh-schedule').value = settings.weighInSchedule || 'weekly';

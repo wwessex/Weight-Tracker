@@ -1,6 +1,6 @@
 // Jab It Data Store - localStorage persistence layer
 /**
- * @typedef {{ name: string, age: string, height: string, heightUnit: string, startWeight: string, startDate: string, medication: string, dosage: string, frequency: string }} Profile
+ * @typedef {{ name: string, age: string, height: string, heightUnit: string, startWeight: string, startDate: string, medication: string, dosage: string, doseUnit: string, frequency: string }} Profile
  * @typedef {{ id: string, date: string, weight: number, note: string }} WeightEntry
  * @typedef {{ id: string, date: string, time: string, medication: string, dose: number, doseUnit: string, site: string, sideEffects: string[], notes: string }} JabEntry
  * @typedef {{ targetWeight: number, weeklyTarget: number, targetDate: string }} Goals
@@ -52,6 +52,7 @@ const Store = (() => {
       startDate: formatLocalDate(new Date()),
       medication: 'semaglutide',
       dosage: '',
+      doseUnit: 'mg',
       frequency: 'weekly',
     },
     settings: {
@@ -396,7 +397,18 @@ const Store = (() => {
 
   // Profile
   function getProfile() {
-    return get(KEYS.PROFILE) || { ...defaults.profile };
+    const stored = get(KEYS.PROFILE);
+    const profile = { ...defaults.profile, ...(stored || {}) };
+    // Migrate: parse unit from legacy free-text dosage (e.g. "0.25 mg")
+    if (profile.dosage && stored && !stored.doseUnit) {
+      const m = String(profile.dosage).match(/^([\d.]+)\s*(mg|ml)$/i);
+      if (m) {
+        profile.dosage = m[1];
+        profile.doseUnit = m[2].toLowerCase();
+        set(KEYS.PROFILE, profile);
+      }
+    }
+    return profile;
   }
   function saveProfile(profile) {
     _invalidateCache();
@@ -1841,6 +1853,7 @@ const Store = (() => {
         mergedProfile.startDate = startDate || defaults.profile.startDate;
         mergedProfile.medication = toStringOrEmpty(mergedProfile.medication || defaults.profile.medication);
         mergedProfile.dosage = toStringOrEmpty(mergedProfile.dosage);
+        mergedProfile.doseUnit = toStringOrEmpty(mergedProfile.doseUnit || defaults.profile.doseUnit);
         mergedProfile.frequency = toStringOrEmpty(mergedProfile.frequency || defaults.profile.frequency);
 
         saveProfile(mergedProfile);
