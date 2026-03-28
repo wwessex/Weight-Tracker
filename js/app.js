@@ -2170,6 +2170,12 @@ const App = (() => {
     // Period summary card
     renderPeriodSummary(stats);
 
+    // Weekly summary
+    renderWeeklySummary();
+
+    // Smart insights
+    renderInsights();
+
     // Mini sparkline
     renderSparkline();
 
@@ -2221,6 +2227,266 @@ const App = (() => {
 
     document.getElementById('ps-month-doses').textContent = period.dosesThisMonth;
     document.getElementById('ps-month-weighins').textContent = period.weighInsThisMonth;
+  }
+
+  // ===== ANALYTICS RENDERERS =====
+
+  function renderWeeklySummary() {
+    const card = document.getElementById('weekly-summary-card');
+    if (!Store.isWeeklySummaryAvailable()) {
+      card.style.display = 'none';
+      return;
+    }
+
+    const summary = Store.getWeeklySummary();
+    const c = summary.current;
+    const p = summary.prior;
+    const unit = summary.unit;
+    const isSt = unit === 'st';
+
+    card.style.display = '';
+
+    // Date range
+    const startParts = summary.startDate.split('-');
+    const endParts = summary.endDate.split('-');
+    const startD = new Date(startParts[0], startParts[1] - 1, startParts[2]);
+    const endD = new Date(endParts[0], endParts[1] - 1, endParts[2]);
+    const dateStr = startD.toLocaleDateString('en', { month: 'short', day: 'numeric' }) + ' - ' + endD.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+    document.getElementById('weekly-summary-dates').textContent = dateStr;
+
+    function cmpArrow(current, prior, lowerIsBetter) {
+      if (prior === null || prior === undefined || current === null || current === undefined) return '';
+      var diff = current - prior;
+      if (Math.abs(diff) < 0.01) return '';
+      var better = lowerIsBetter ? diff < 0 : diff > 0;
+      return '<span class="weekly-cmp ' + (better ? 'weekly-cmp-good' : 'weekly-cmp-bad') + '">' + (diff > 0 ? '\u25B2' : '\u25BC') + '</span>';
+    }
+
+    function formatWeightChange(val) {
+      if (val === null) return '--';
+      var sign = val > 0 ? '+' : '';
+      return isSt ? sign + Store.formatStone(val) : sign + val.toFixed(1) + ' ' + unit;
+    }
+
+    const grid = document.getElementById('weekly-summary-grid');
+    grid.innerHTML =
+      '<div class="weekly-metric">' +
+        '<div class="weekly-metric-value ' + (c.weightChange !== null && c.weightChange < 0 ? 'loss' : c.weightChange > 0 ? 'gain' : '') + '">' +
+          formatWeightChange(c.weightChange) + cmpArrow(c.weightChange, p.weightChange, true) +
+        '</div>' +
+        '<div class="weekly-metric-label">Weight</div>' +
+      '</div>' +
+      '<div class="weekly-metric">' +
+        '<div class="weekly-metric-value">' + c.doses + '/' + c.expectedDoses + cmpArrow(c.doses, p.doses, false) + '</div>' +
+        '<div class="weekly-metric-label">Doses</div>' +
+      '</div>' +
+      '<div class="weekly-metric">' +
+        '<div class="weekly-metric-value">' + c.exerciseMinutes + '<small>min</small>' + cmpArrow(c.exerciseMinutes, p.exerciseMinutes, false) + '</div>' +
+        '<div class="weekly-metric-label">Exercise</div>' +
+      '</div>' +
+      '<div class="weekly-metric">' +
+        '<div class="weekly-metric-value">' + (c.avgMood !== null ? c.avgMood.toFixed(1) : '--') + cmpArrow(c.avgMood, p.avgMood, false) + '</div>' +
+        '<div class="weekly-metric-label">Mood</div>' +
+      '</div>';
+
+    // Dismiss handler
+    const dismissBtn = document.getElementById('btn-dismiss-weekly');
+    dismissBtn.onclick = function() {
+      Store.dismissWeeklySummary(summary.weekId);
+      card.style.display = 'none';
+    };
+  }
+
+  let velocityChart = null;
+
+  function renderInsights() {
+    const card = document.getElementById('insights-card');
+    const insights = Store.getInsights();
+
+    if (insights.length === 0) {
+      card.style.display = 'none';
+      return;
+    }
+
+    card.style.display = '';
+    const list = document.getElementById('insights-list');
+    list.innerHTML = insights.map(function(insight) {
+      return '<div class="insight-row insight-' + escapeHtml(insight.type) + '">' +
+        '<span class="insight-icon">' + insight.icon + '</span>' +
+        '<span class="insight-message">' + escapeHtml(insight.message) + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderVelocityCard() {
+    const card = document.getElementById('velocity-card');
+    const velocity = Store.getWeightVelocity();
+    const unit = Store.getSettings().weightUnit;
+
+    if (velocity.dataPoints.length < 3) {
+      card.style.display = 'none';
+      return;
+    }
+
+    card.style.display = '';
+
+    // Text
+    const trendLabels = { accelerating: 'Accelerating', steady: 'Steady', slowing: 'Slowing down' };
+    const trendIcons = { accelerating: '\u2197\uFE0F', steady: '\u27A1\uFE0F', slowing: '\u2198\uFE0F' };
+    document.getElementById('velocity-icon').textContent = trendIcons[velocity.trend] || '';
+    const rateText = velocity.currentRate !== null ? Math.abs(velocity.currentRate).toFixed(1) + ' ' + unit + '/wk' : '';
+    document.getElementById('velocity-text').textContent =
+      'Loss rate: ' + (trendLabels[velocity.trend] || 'Steady') + (rateText ? ' (' + rateText + ')' : '');
+
+    // Mini chart
+    velocityChart = destroyChart(velocityChart);
+    const ctx = document.getElementById('chart-velocity').getContext('2d');
+    const colors = getChartColors();
+
+    const trendColors = { accelerating: '#10b981', steady: colors.primary, slowing: '#f97316' };
+    const lineColor = trendColors[velocity.trend] || colors.primary;
+
+    velocityChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: velocity.dataPoints.map(function(d) { return d.periodEnd; }),
+        datasets: [{
+          data: velocity.dataPoints.map(function(d) { return d.weeklyRate; }),
+          borderColor: lineColor,
+          backgroundColor: lineColor + '20',
+          borderWidth: 2,
+          tension: 0.4,
+          fill: true,
+          pointRadius: 0,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: {
+          x: { display: false },
+          y: {
+            display: false,
+            beginAtZero: true,
+          }
+        },
+        animation: { duration: 600 },
+      }
+    });
+  }
+
+  function renderVariabilityNote() {
+    const note = document.getElementById('variability-note');
+    const variability = Store.getWeightVariability();
+    const unit = Store.getSettings().weightUnit;
+    const isSt = unit === 'st';
+
+    if (!variability.stdDev) {
+      note.style.display = 'none';
+      return;
+    }
+
+    note.style.display = '';
+    const rangeText = isSt ? Store.formatStone(variability.typicalRange) : variability.typicalRange.toFixed(1) + ' ' + unit;
+    let msg = 'Your typical daily fluctuation is \u00B1' + rangeText + '. ';
+    if (variability.isWithinNormal) {
+      msg += 'Your latest weight is within the normal range.';
+    } else {
+      msg += 'Your latest weight is outside the usual range.';
+    }
+    document.getElementById('variability-text').textContent = msg;
+  }
+
+  function renderMonthlyComparison() {
+    const card = document.getElementById('monthly-comparison-card');
+    const months = Store.getMonthlyComparison();
+    const unit = Store.getSettings().weightUnit;
+    const isSt = unit === 'st';
+
+    // Only show if at least 2 months have data
+    const withData = months.filter(function(m) { return m.weightLost !== null || m.doses > 0; });
+    if (withData.length < 2) {
+      card.style.display = 'none';
+      return;
+    }
+
+    card.style.display = '';
+    const table = document.getElementById('monthly-comparison-table');
+
+    // Find best values
+    const validWeights = months.filter(function(m) { return m.weightLost !== null; });
+    const bestWeight = validWeights.length > 0 ? Math.max.apply(null, validWeights.map(function(m) { return m.weightLost; })) : null;
+    const bestExercise = Math.max.apply(null, months.map(function(m) { return m.exerciseMinutes; }));
+
+    let html = '<div class="mc-row mc-header"><div class="mc-label"></div>';
+    months.forEach(function(m) {
+      html += '<div class="mc-cell' + (m.isCurrent ? ' mc-current' : '') + '">' + escapeHtml(m.label) + '</div>';
+    });
+    html += '</div>';
+
+    // Weight row
+    html += '<div class="mc-row"><div class="mc-label">Weight Lost</div>';
+    months.forEach(function(m) {
+      var val = m.weightLost !== null ? (isSt ? Store.formatStone(m.weightLost) : m.weightLost.toFixed(1)) : '--';
+      var isBest = m.weightLost !== null && m.weightLost === bestWeight && bestWeight > 0;
+      html += '<div class="mc-cell' + (isBest ? ' mc-best' : '') + (m.isCurrent ? ' mc-current' : '') + '">' + val + '</div>';
+    });
+    html += '</div>';
+
+    // Doses row
+    html += '<div class="mc-row"><div class="mc-label">Doses</div>';
+    months.forEach(function(m) {
+      html += '<div class="mc-cell' + (m.isCurrent ? ' mc-current' : '') + '">' + m.doses + '</div>';
+    });
+    html += '</div>';
+
+    // Exercise row
+    html += '<div class="mc-row"><div class="mc-label">Exercise</div>';
+    months.forEach(function(m) {
+      var isBest = m.exerciseMinutes === bestExercise && bestExercise > 0;
+      html += '<div class="mc-cell' + (isBest ? ' mc-best' : '') + (m.isCurrent ? ' mc-current' : '') + '">' + m.exerciseMinutes + '<small>min</small></div>';
+    });
+    html += '</div>';
+
+    // Mood row
+    html += '<div class="mc-row"><div class="mc-label">Avg Mood</div>';
+    months.forEach(function(m) {
+      html += '<div class="mc-cell' + (m.isCurrent ? ' mc-current' : '') + '">' + (m.avgMood !== null ? m.avgMood.toFixed(1) : '--') + '</div>';
+    });
+    html += '</div>';
+
+    table.innerHTML = html;
+  }
+
+  function renderConfidenceBand(weights, datasets) {
+    const band = Store.getConfidenceBand();
+    if (band.length < 2) return;
+
+    // Filter band to match visible weight date range
+    const weightDates = {};
+    weights.forEach(function(w) { weightDates[w.date] = true; });
+
+    const filteredBand = band.filter(function(b) { return weightDates[b.date]; });
+    if (filteredBand.length < 2) return;
+
+    datasets.push({
+      label: 'Confidence (High)',
+      data: filteredBand.map(function(b) { return { x: b.date, y: b.upper }; }),
+      borderColor: 'rgba(99,102,241,0.1)',
+      borderWidth: 0,
+      pointRadius: 0,
+      fill: '+1',
+      backgroundColor: 'rgba(99,102,241,0.08)',
+    });
+    datasets.push({
+      label: 'Confidence (Low)',
+      data: filteredBand.map(function(b) { return { x: b.date, y: b.lower }; }),
+      borderColor: 'rgba(99,102,241,0.1)',
+      borderWidth: 0,
+      pointRadius: 0,
+      fill: false,
+    });
   }
 
   function renderSparkline() {
@@ -3057,6 +3323,15 @@ const App = (() => {
       rateCard.style.display = 'none';
     }
 
+    // Velocity card
+    renderVelocityCard();
+
+    // Variability note
+    renderVariabilityNote();
+
+    // Monthly comparison
+    renderMonthlyComparison();
+
     // Filter weights
     const normalizedWeights = normalizeDateEntries(weights, 'progress weight entry');
     const filtered = filterByDateRange(normalizedWeights, currentProgressRange);
@@ -3205,6 +3480,9 @@ const App = (() => {
       }
     }
 
+    // Confidence band
+    renderConfidenceBand(weights, datasets);
+
     weightFullChart = new Chart(ctx, {
       type: 'line',
       data: { datasets },
@@ -3219,14 +3497,14 @@ const App = (() => {
             labels: {
               color: colors.textMuted,
               font: { size: 10 },
-              filter: (item) => !item.text.startsWith('Healthy'),
+              filter: (item) => !item.text.startsWith('Healthy') && !item.text.startsWith('Confidence'),
             },
           },
           tooltip: chartTooltipConfig({
             borderColor: 'rgba(99,102,241,0.3)',
             borderWidth: 1,
             displayColors: false,
-            filter: (item) => !item.dataset.label.startsWith('Healthy'),
+            filter: (item) => !item.dataset.label.startsWith('Healthy') && !item.dataset.label.startsWith('Confidence'),
             callbacks: {
               label: (c) => {
                 const u = Store.getSettings().weightUnit;

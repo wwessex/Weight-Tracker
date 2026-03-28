@@ -2091,6 +2091,508 @@ const Store = (() => {
   }
 
   // Clear all data
+  // ===== ANALYTICS: Weekly Summary =====
+  function getWeeklySummary() {
+    var now = parseLocalDate(new Date());
+    var dayOfWeek = now.getDay(); // 0=Sun
+    // Monday-based week: find previous Monday
+    var mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    var thisMonday = new Date(now);
+    thisMonday.setDate(thisMonday.getDate() - mondayOffset);
+
+    var prevMonday = new Date(thisMonday);
+    prevMonday.setDate(prevMonday.getDate() - 7);
+    var prevSunday = new Date(thisMonday);
+    prevSunday.setDate(prevSunday.getDate() - 1);
+
+    // Also get the week before that for comparison
+    var prevPrevMonday = new Date(prevMonday);
+    prevPrevMonday.setDate(prevPrevMonday.getDate() - 7);
+
+    var weekId = now.getFullYear() + '-W' + String(Math.ceil(((thisMonday - new Date(now.getFullYear(), 0, 1)) / 86400000 + 1) / 7)).padStart(2, '0');
+
+    // Check if dismissed
+    var dismissed = [];
+    try {
+      dismissed = JSON.parse(localStorage.getItem('shotsy_weekly_dismissed') || '[]');
+    } catch (e) { dismissed = []; }
+
+    function summarizeWeek(startDate, endDate) {
+      var weights = withNormalizedLocalDates(getWeights(), 'weekly-summary weight');
+      var jabs = withNormalizedLocalDates(getJabs(), 'weekly-summary dose');
+      var journal = withNormalizedLocalDates(getJournal(), 'weekly-summary journal');
+      var exercises = withNormalizedLocalDates(getExercises(), 'weekly-summary exercise');
+      var fasts = getFasts().filter(function(f) { return f.completed; });
+
+      var wWeights = weights.filter(function(w) { return w._localDate >= startDate && w._localDate <= endDate; });
+      var wJabs = jabs.filter(function(j) { return j._localDate >= startDate && j._localDate <= endDate; });
+      var wJournal = journal.filter(function(j) { return j._localDate >= startDate && j._localDate <= endDate; });
+      var wExercises = exercises.filter(function(e) { return e._localDate >= startDate && e._localDate <= endDate; });
+      var wFasts = fasts.filter(function(f) {
+        var d = parseLocalDate(f.startTime || f.date);
+        return d && d >= startDate && d <= endDate;
+      });
+
+      // Weight change
+      var weightChange = null;
+      if (wWeights.length >= 2) {
+        var first = parseWeight(wWeights[0].weight);
+        var last = parseWeight(wWeights[wWeights.length - 1].weight);
+        if (Number.isFinite(first) && Number.isFinite(last)) {
+          weightChange = Math.round((last - first) * 100) / 100;
+        }
+      }
+
+      // Doses
+      var profile = getProfile();
+      var freq = profile.frequency || 'weekly';
+      var freqDays = { daily: 1, weekly: 7, biweekly: 14, monthly: 30 };
+      var expectedDoses = Math.round(7 / (freqDays[freq] || 7));
+
+      // Exercise
+      var exerciseMinutes = wExercises.reduce(function(sum, e) { return sum + (parseFloat(e.duration) || 0); }, 0);
+
+      // Mood/Energy
+      var moods = wJournal.filter(function(j) { return j.mood; }).map(function(j) { return parseFloat(j.mood); });
+      var energies = wJournal.filter(function(j) { return j.energy; }).map(function(j) { return parseFloat(j.energy); });
+      var avgMood = moods.length > 0 ? Math.round(moods.reduce(function(a, b) { return a + b; }, 0) / moods.length * 10) / 10 : null;
+      var avgEnergy = energies.length > 0 ? Math.round(energies.reduce(function(a, b) { return a + b; }, 0) / energies.length * 10) / 10 : null;
+
+      // Side effects
+      var effectCounts = {};
+      wJabs.forEach(function(j) {
+        if (!j.sideEffects) return;
+        j.sideEffects.forEach(function(se) {
+          if (se !== 'none') effectCounts[se] = (effectCounts[se] || 0) + 1;
+        });
+      });
+      wJournal.forEach(function(j) {
+        if (!j.symptoms) return;
+        j.symptoms.forEach(function(s) {
+          if (s !== 'none') effectCounts[s] = (effectCounts[s] || 0) + 1;
+        });
+      });
+      var topEffect = Object.entries(effectCounts).sort(function(a, b) { return b[1] - a[1]; })[0];
+
+      return {
+        weightChange: weightChange,
+        weighIns: wWeights.length,
+        doses: wJabs.length,
+        expectedDoses: expectedDoses,
+        exerciseSessions: wExercises.length,
+        exerciseMinutes: Math.round(exerciseMinutes),
+        avgMood: avgMood,
+        avgEnergy: avgEnergy,
+        fasts: wFasts.length,
+        topSideEffect: topEffect ? topEffect[0] : null,
+      };
+    }
+
+    var current = summarizeWeek(prevMonday, prevSunday);
+    var prior = summarizeWeek(prevPrevMonday, new Date(prevMonday.getTime() - 86400000));
+
+    return {
+      weekId: weekId,
+      startDate: formatLocalDate(prevMonday),
+      endDate: formatLocalDate(prevSunday),
+      current: current,
+      prior: prior,
+      isDismissed: dismissed.indexOf(weekId) !== -1,
+      unit: getSettings().weightUnit,
+    };
+  }
+
+  function isWeeklySummaryAvailable() {
+    var summary = getWeeklySummary();
+    if (summary.isDismissed) return false;
+    var c = summary.current;
+    return c.weighIns > 0 || c.doses > 0 || c.exerciseSessions > 0;
+  }
+
+  function dismissWeeklySummary(weekId) {
+    var dismissed = [];
+    try {
+      dismissed = JSON.parse(localStorage.getItem('shotsy_weekly_dismissed') || '[]');
+    } catch (e) { dismissed = []; }
+    if (dismissed.indexOf(weekId) === -1) {
+      dismissed.push(weekId);
+      // Keep only last 10
+      if (dismissed.length > 10) dismissed = dismissed.slice(-10);
+      localStorage.setItem('shotsy_weekly_dismissed', JSON.stringify(dismissed));
+    }
+  }
+
+  // ===== ANALYTICS: Weight Velocity =====
+  function getWeightVelocity() {
+    var weights = withNormalizedLocalDates(getWeights(), 'velocity weight');
+    if (weights.length < 4) return { dataPoints: [], trend: 'steady', currentRate: null };
+
+    var now = parseLocalDate(new Date());
+    var cutoff = new Date(now);
+    cutoff.setDate(cutoff.getDate() - 90);
+    var recent = weights.filter(function(w) { return w._localDate >= cutoff; });
+    if (recent.length < 4) recent = weights;
+
+    var windowDays = 14;
+    var stepDays = 7;
+    var dataPoints = [];
+    var startDate = recent[0]._localDate;
+    var endDate = recent[recent.length - 1]._localDate;
+    var cursor = new Date(startDate);
+    cursor.setDate(cursor.getDate() + windowDays);
+
+    while (cursor <= endDate) {
+      var windowStart = new Date(cursor);
+      windowStart.setDate(windowStart.getDate() - windowDays);
+      var inWindow = recent.filter(function(w) {
+        return w._localDate >= windowStart && w._localDate <= cursor;
+      });
+      if (inWindow.length >= 2) {
+        var first = parseWeight(inWindow[0].weight);
+        var last = parseWeight(inWindow[inWindow.length - 1].weight);
+        var days = (inWindow[inWindow.length - 1]._localDate - inWindow[0]._localDate) / 86400000;
+        if (days > 0) {
+          var weeklyRate = Math.round(((first - last) / days) * 7 * 100) / 100;
+          dataPoints.push({ periodEnd: formatLocalDate(cursor), weeklyRate: weeklyRate });
+        }
+      }
+      cursor.setDate(cursor.getDate() + stepDays);
+    }
+
+    // Determine trend via simple linear regression on rates
+    var trend = 'steady';
+    var currentRate = dataPoints.length > 0 ? dataPoints[dataPoints.length - 1].weeklyRate : null;
+    if (dataPoints.length >= 3) {
+      var n = dataPoints.length;
+      var sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+      for (var i = 0; i < n; i++) {
+        sumX += i;
+        sumY += dataPoints[i].weeklyRate;
+        sumXY += i * dataPoints[i].weeklyRate;
+        sumX2 += i * i;
+      }
+      var slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+      if (slope > 0.05) trend = 'accelerating';
+      else if (slope < -0.05) trend = 'slowing';
+    }
+
+    return { dataPoints: dataPoints, trend: trend, currentRate: currentRate };
+  }
+
+  // ===== ANALYTICS: Smart Insights =====
+  function getInsights() {
+    var insights = [];
+    var stats = getStats();
+    var settings = getSettings();
+    var unit = settings.weightUnit;
+
+    // Need minimum data
+    if (stats.daysOnPlan < 7 || stats.totalEntries < 2) return insights;
+
+    var weights = withNormalizedLocalDates(getWeights(), 'insights weight');
+    var jabs = withNormalizedLocalDates(getJabs(), 'insights dose');
+    var journal = withNormalizedLocalDates(getJournal(), 'insights journal');
+    var exercises = withNormalizedLocalDates(getExercises(), 'insights exercise');
+    var now = parseLocalDate(new Date());
+
+    // 1. Plateau Detection
+    if (weights.length >= 4) {
+      var d14 = new Date(now); d14.setDate(d14.getDate() - 14);
+      var d28 = new Date(now); d28.setDate(d28.getDate() - 28);
+      var recent14 = weights.filter(function(w) { return w._localDate >= d14; });
+      var prior14 = weights.filter(function(w) { return w._localDate >= d28 && w._localDate < d14; });
+      if (recent14.length >= 2 && prior14.length >= 2) {
+        var recentFirst = parseWeight(recent14[0].weight);
+        var recentLast = parseWeight(recent14[recent14.length - 1].weight);
+        var priorFirst = parseWeight(prior14[0].weight);
+        var priorLast = parseWeight(prior14[prior14.length - 1].weight);
+        var recentChange = Math.abs(recentFirst - recentLast);
+        var priorChange = priorFirst - priorLast;
+        var plateauThreshold = unit === 'lbs' ? 0.5 : (unit === 'st' ? 0.04 : 0.2);
+        var lossThreshold = unit === 'lbs' ? 1.0 : (unit === 'st' ? 0.07 : 0.5);
+        if (recentChange < plateauThreshold && priorChange > lossThreshold) {
+          insights.push({ type: 'alert', message: 'You may be hitting a plateau - this is normal on GLP-1 medications. Stay consistent!', icon: '\u23F8', priority: 9 });
+        }
+      }
+    }
+
+    // 2. Exercise-Weight Correlation (need 4+ weeks)
+    if (weights.length >= 4 && exercises.length >= 2 && stats.daysOnPlan >= 28) {
+      var weekBuckets = {};
+      weights.forEach(function(w) {
+        var weekKey = w.date.substring(0, 7) + '-W' + Math.floor(w._localDate.getDate() / 7);
+        if (!weekBuckets[weekKey]) weekBuckets[weekKey] = { weights: [], exercises: 0 };
+        weekBuckets[weekKey].weights.push(parseWeight(w.weight));
+      });
+      exercises.forEach(function(e) {
+        var weekKey = e.date.substring(0, 7) + '-W' + Math.floor(e._localDate.getDate() / 7);
+        if (weekBuckets[weekKey]) weekBuckets[weekKey].exercises++;
+      });
+      var activeWeeks = [], inactiveWeeks = [];
+      Object.values(weekBuckets).forEach(function(b) {
+        if (b.weights.length < 2) return;
+        var change = b.weights[0] - b.weights[b.weights.length - 1];
+        if (b.exercises >= 3) activeWeeks.push(change);
+        else inactiveWeeks.push(change);
+      });
+      if (activeWeeks.length >= 2 && inactiveWeeks.length >= 2) {
+        var avgActive = activeWeeks.reduce(function(a, b) { return a + b; }, 0) / activeWeeks.length;
+        var avgInactive = inactiveWeeks.reduce(function(a, b) { return a + b; }, 0) / inactiveWeeks.length;
+        if (avgActive > avgInactive * 1.2 && avgActive > 0) {
+          var diff = unit === 'st' ? Store.formatStone(Math.abs(avgActive - avgInactive)) : Math.abs(avgActive - avgInactive).toFixed(1) + ' ' + unit;
+          insights.push({ type: 'positive', message: 'Weeks with 3+ workouts show ' + diff + ' more loss on average.', icon: '\uD83C\uDFCB', priority: 8 });
+        }
+      }
+    }
+
+    // 3. Dose Day Mood
+    if (jabs.length >= 3 && journal.length >= 5) {
+      var jabDates = {};
+      jabs.forEach(function(j) { jabDates[j.date] = true; });
+      var doseDayMoods = [], nonDoseMoods = [];
+      journal.forEach(function(j) {
+        if (!j.mood) return;
+        if (jabDates[j.date]) doseDayMoods.push(parseFloat(j.mood));
+        else nonDoseMoods.push(parseFloat(j.mood));
+      });
+      if (doseDayMoods.length >= 2 && nonDoseMoods.length >= 2) {
+        var avgDose = doseDayMoods.reduce(function(a, b) { return a + b; }, 0) / doseDayMoods.length;
+        var avgNonDose = nonDoseMoods.reduce(function(a, b) { return a + b; }, 0) / nonDoseMoods.length;
+        if (Math.abs(avgDose - avgNonDose) >= 0.5) {
+          var direction = avgDose < avgNonDose ? 'lower' : 'higher';
+          insights.push({ type: 'neutral', message: 'Your mood tends to be ' + direction + ' on dose days (' + avgDose.toFixed(1) + ' vs ' + avgNonDose.toFixed(1) + ').', icon: '\uD83D\uDE4F', priority: 6 });
+        }
+      }
+    }
+
+    // 4. Side Effect After Escalation
+    var escalations = getDoseEscalations();
+    if (escalations.length >= 1 && jabs.length >= 3) {
+      var postEscEffects = 0, postEscDoses = 0;
+      var normalEffects = 0, normalDoses = 0;
+      escalations.forEach(function(esc) {
+        var escDate = parseLocalDate(esc.date);
+        if (!escDate) return;
+        var weekAfter = new Date(escDate);
+        weekAfter.setDate(weekAfter.getDate() + 7);
+        jabs.forEach(function(j) {
+          if (!j.sideEffects || j.sideEffects.length === 0) return;
+          var effectCount = j.sideEffects.filter(function(se) { return se !== 'none'; }).length;
+          if (j._localDate >= escDate && j._localDate <= weekAfter) {
+            postEscEffects += effectCount;
+            postEscDoses++;
+          } else {
+            normalEffects += effectCount;
+            normalDoses++;
+          }
+        });
+      });
+      if (postEscDoses >= 1 && normalDoses >= 2) {
+        var postRate = postEscEffects / postEscDoses;
+        var normalRate = normalEffects / normalDoses;
+        if (postRate > normalRate * 1.5) {
+          insights.push({ type: 'neutral', message: 'Side effects are most common in the first week after a dose increase.', icon: '\u26A0', priority: 7 });
+        }
+      }
+    }
+
+    // 5. Best Weigh-in Day
+    if (weights.length >= 14) {
+      var dayBuckets = [[], [], [], [], [], [], []];
+      var dayNames = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
+      weights.forEach(function(w) { dayBuckets[w._localDate.getDay()].push(parseWeight(w.weight)); });
+      var bestDay = -1, bestVariance = Infinity;
+      dayBuckets.forEach(function(bucket, idx) {
+        if (bucket.length < 3) return;
+        var mean = bucket.reduce(function(a, b) { return a + b; }, 0) / bucket.length;
+        var variance = bucket.reduce(function(sum, v) { return sum + Math.pow(v - mean, 2); }, 0) / bucket.length;
+        if (variance < bestVariance) { bestVariance = variance; bestDay = idx; }
+      });
+      if (bestDay >= 0) {
+        insights.push({ type: 'neutral', message: 'Your most consistent weigh-ins are on ' + dayNames[bestDay] + '.', icon: '\uD83D\uDCC5', priority: 3 });
+      }
+    }
+
+    // 6. Measurement vs Scale
+    var measStats = getMeasurementStats();
+    if (measStats.total >= 2 && weights.length >= 4) {
+      var d30m = new Date(now); d30m.setDate(d30m.getDate() - 30);
+      var recent30 = weights.filter(function(w) { return w._localDate >= d30m; });
+      if (recent30.length >= 2) {
+        var scaleChange = parseWeight(recent30[recent30.length - 1].weight) - parseWeight(recent30[0].weight);
+        var measChange = 0;
+        var measFields = ['waist', 'hips', 'chest'];
+        measFields.forEach(function(f) {
+          if (measStats.changes && measStats.changes[f]) measChange += measStats.changes[f];
+        });
+        if (Math.abs(scaleChange) < 0.5 && measChange < -2) {
+          insights.push({ type: 'positive', message: 'Your measurements show progress even though the scale hasn\'t moved - you may be recomposing!', icon: '\uD83D\uDCCF', priority: 8 });
+        }
+      }
+    }
+
+    // 7. Streak Celebration
+    var streakData = getStreakData();
+    var combinedStreak = Math.max(streakData.weightStreak, streakData.doseStreak);
+    if (combinedStreak >= 3) {
+      insights.push({ type: 'positive', message: 'You\'re on a ' + combinedStreak + '-week streak! Keep it going!', icon: '\uD83D\uDD25', priority: 4 });
+    }
+
+    // 8. Projected Milestone
+    if (stats.avgWeeklyLoss > 0 && stats.targetWeight) {
+      var nextMilestones = [];
+      var totalLost = stats.totalLost || 0;
+      var pctLost = stats.startWeight > 0 ? (totalLost / stats.startWeight) * 100 : 0;
+      if (pctLost < 5) nextMilestones.push({ label: '5% body weight', target: stats.startWeight * 0.05 - totalLost });
+      else if (pctLost < 10) nextMilestones.push({ label: '10% body weight', target: stats.startWeight * 0.10 - totalLost });
+      if (stats.progressPercent < 50) nextMilestones.push({ label: 'halfway to goal', target: (stats.startWeight - stats.targetWeight) / 2 - totalLost });
+      var nextMs = nextMilestones.filter(function(m) { return m.target > 0; }).sort(function(a, b) { return a.target - b.target; })[0];
+      if (nextMs && stats.avgWeeklyLoss > 0) {
+        var weeksToMs = Math.round(nextMs.target / stats.avgWeeklyLoss);
+        if (weeksToMs > 0 && weeksToMs < 52) {
+          insights.push({ type: 'neutral', message: 'At your current rate, you\'ll hit ' + nextMs.label + ' in ~' + weeksToMs + ' week' + (weeksToMs === 1 ? '' : 's') + '.', icon: '\uD83C\uDFAF', priority: 5 });
+        }
+      }
+    }
+
+    // 9. Dose Adherence Impact
+    if (jabs.length >= 4 && weights.length >= 8 && stats.daysOnPlan >= 28) {
+      var profile = getProfile();
+      var freq = profile.frequency || 'weekly';
+      var freqDays = { daily: 1, weekly: 7, biweekly: 14, monthly: 30 };
+      var interval = freqDays[freq] || 7;
+      // Compare weeks with on-time doses vs missed
+      var onTimeWeeks = [], missedWeeks = [];
+      var weekStart = new Date(weights[0]._localDate);
+      while (weekStart < now) {
+        var weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+        var wWeights = weights.filter(function(w) { return w._localDate >= weekStart && w._localDate < weekEnd; });
+        var wJabs = jabs.filter(function(j) { return j._localDate >= weekStart && j._localDate < weekEnd; });
+        var expectedCount = Math.round(7 / interval);
+        if (wWeights.length >= 2) {
+          var wFirst = parseWeight(wWeights[0].weight);
+          var wLast = parseWeight(wWeights[wWeights.length - 1].weight);
+          var loss = wFirst - wLast;
+          if (wJabs.length >= expectedCount) onTimeWeeks.push(loss);
+          else missedWeeks.push(loss);
+        }
+        weekStart = weekEnd;
+      }
+      if (onTimeWeeks.length >= 2 && missedWeeks.length >= 1) {
+        var avgOnTime = onTimeWeeks.reduce(function(a, b) { return a + b; }, 0) / onTimeWeeks.length;
+        var avgMissed = missedWeeks.reduce(function(a, b) { return a + b; }, 0) / missedWeeks.length;
+        if (avgOnTime > avgMissed + 0.1) {
+          insights.push({ type: 'positive', message: 'Consistent dosing appears to improve your results. Keep up the adherence!', icon: '\uD83D\uDC89', priority: 7 });
+        }
+      }
+    }
+
+    // Sort by priority (highest first), return top 4
+    insights.sort(function(a, b) { return b.priority - a.priority; });
+    return insights.slice(0, 4);
+  }
+
+  // ===== ANALYTICS: Monthly Comparison =====
+  function getMonthlyComparison() {
+    var weights = withNormalizedLocalDates(getWeights(), 'monthly-comparison weight');
+    var jabs = withNormalizedLocalDates(getJabs(), 'monthly-comparison dose');
+    var exercises = withNormalizedLocalDates(getExercises(), 'monthly-comparison exercise');
+    var journal = withNormalizedLocalDates(getJournal(), 'monthly-comparison journal');
+    var now = parseLocalDate(new Date());
+
+    var months = [];
+    for (var i = 0; i < 6; i++) {
+      var monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      var monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+      var monthLabel = monthStart.toLocaleDateString('en', { month: 'short', year: '2-digit' });
+
+      var mWeights = weights.filter(function(w) { return w._localDate >= monthStart && w._localDate <= monthEnd; });
+      var mJabs = jabs.filter(function(j) { return j._localDate >= monthStart && j._localDate <= monthEnd; });
+      var mExercises = exercises.filter(function(e) { return e._localDate >= monthStart && e._localDate <= monthEnd; });
+      var mJournal = journal.filter(function(j) { return j._localDate >= monthStart && j._localDate <= monthEnd; });
+
+      var weightLost = null;
+      if (mWeights.length >= 2) {
+        var first = parseWeight(mWeights[0].weight);
+        var last = parseWeight(mWeights[mWeights.length - 1].weight);
+        weightLost = Math.round((first - last) * 100) / 100;
+      }
+
+      var moods = mJournal.filter(function(j) { return j.mood; }).map(function(j) { return parseFloat(j.mood); });
+      var avgMood = moods.length > 0 ? Math.round(moods.reduce(function(a, b) { return a + b; }, 0) / moods.length * 10) / 10 : null;
+
+      var exerciseMin = mExercises.reduce(function(sum, e) { return sum + (parseFloat(e.duration) || 0); }, 0);
+
+      months.push({
+        label: monthLabel,
+        isCurrent: i === 0,
+        weightLost: weightLost,
+        doses: mJabs.length,
+        exerciseSessions: mExercises.length,
+        exerciseMinutes: Math.round(exerciseMin),
+        avgMood: avgMood,
+      });
+    }
+
+    return months.reverse();
+  }
+
+  // ===== ANALYTICS: Weight Variability & Confidence Band =====
+  function getWeightVariability() {
+    var weights = withNormalizedLocalDates(getWeights(), 'variability weight');
+    if (weights.length < 5) return { stdDev: null, typicalRange: null, isWithinNormal: true };
+
+    var d30 = new Date(parseLocalDate(new Date()));
+    d30.setDate(d30.getDate() - 30);
+    var recent = weights.filter(function(w) { return w._localDate >= d30; });
+    if (recent.length < 5) recent = weights.slice(-30);
+
+    // Calculate daily changes
+    var changes = [];
+    for (var i = 1; i < recent.length; i++) {
+      var prev = parseWeight(recent[i - 1].weight);
+      var curr = parseWeight(recent[i].weight);
+      if (Number.isFinite(prev) && Number.isFinite(curr)) {
+        changes.push(curr - prev);
+      }
+    }
+    if (changes.length < 3) return { stdDev: null, typicalRange: null, isWithinNormal: true };
+
+    var mean = changes.reduce(function(a, b) { return a + b; }, 0) / changes.length;
+    var variance = changes.reduce(function(sum, c) { return sum + Math.pow(c - mean, 2); }, 0) / changes.length;
+    var stdDev = Math.round(Math.sqrt(variance) * 100) / 100;
+    var typicalRange = Math.round(stdDev * 2 * 100) / 100;
+
+    // Check if latest weight is within normal
+    var movingAvg = getMovingAverage(14);
+    var isWithinNormal = true;
+    if (movingAvg.length > 0 && weights.length > 0) {
+      var latestWeight = parseWeight(weights[weights.length - 1].weight);
+      var latestAvg = movingAvg[movingAvg.length - 1].avg;
+      isWithinNormal = Math.abs(latestWeight - latestAvg) <= stdDev * 2;
+    }
+
+    return { stdDev: stdDev, typicalRange: typicalRange, isWithinNormal: isWithinNormal };
+  }
+
+  function getConfidenceBand() {
+    var variability = getWeightVariability();
+    if (!variability.stdDev) return [];
+
+    var movingAvg = getMovingAverage(14);
+    var bandWidth = variability.stdDev * 1.5;
+
+    return movingAvg.map(function(point) {
+      return {
+        date: point.date,
+        upper: Math.round((point.avg + bandWidth) * 100) / 100,
+        lower: Math.round((point.avg - bandWidth) * 100) / 100,
+        avg: point.avg,
+      };
+    });
+  }
+
   function clearAll() {
     Object.values(KEYS).forEach(k => localStorage.removeItem(k));
     if (window.indexedDB) {
@@ -2121,6 +2623,9 @@ const Store = (() => {
     getSideEffectTrends, getDoseEscalations,
     getMovingAverage, getRateOfLoss, getNextRecommendedSite,
     getPeriodSummary, calculateGoalDate, getDoseWeightCorrelation,
+    getWeeklySummary, isWeeklySummaryAvailable, dismissWeeklySummary,
+    getWeightVelocity, getInsights, getMonthlyComparison,
+    getWeightVariability, getConfidenceBand,
     convertWeight, convertAllWeights,
     stLbsToDecimal, decimalToStLbs, formatStone,
     exportData, exportCSV, importData,
