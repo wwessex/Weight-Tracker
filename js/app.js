@@ -540,7 +540,8 @@ const App = (() => {
       if (screen === screenChooser) setRestorePanelOpen(false);
       updateOnboardingProgress(screen);
       announceObScreen(screen);
-      screen.closest('.modal').scrollTop = 0;
+      var modal = screen.closest('.modal');
+      if (modal) modal.scrollTop = 0;
       setTimeout(function () {
         focusOnboardingScreen(screen);
       }, 0);

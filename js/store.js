@@ -505,7 +505,7 @@ const Store = (() => {
     cutoff.setDate(cutoff.getDate() - (days || 30));
     return journal
       .filter(j => j._localDate >= cutoff)
-      .map(j => ({ date: j.date, mood: j.mood || null, energy: j.energy || null }));
+      .map(j => ({ date: j.date, mood: j.mood != null && j.mood !== '' ? j.mood : null, energy: j.energy != null && j.energy !== '' ? j.energy : null }));
   }
 
   const fastCol = createCollection(KEYS.FASTS, {
@@ -875,7 +875,7 @@ const Store = (() => {
   // Stone + pounds helpers
   function normalizeStoneValue(value) {
     const parsed = parseFloat(value);
-    if (!Number.isFinite(parsed)) return parsed;
+    if (!Number.isFinite(parsed)) return null;
 
     const raw = String(value == null ? '' : value).trim();
     const match = raw.match(/^(-?\d+)(?:\.(\d+))?$/);
@@ -936,6 +936,7 @@ const Store = (() => {
   function formatStone(val) {
     if (val === null || val === undefined || isNaN(val)) return '--';
     var normalized = normalizeStoneValue(val);
+    if (normalized === null || isNaN(normalized)) return '--';
     var parts = decimalToStLbs(parseFloat(normalized));
     return parts.st + 'st ' + parts.lbs + 'lbs';
   }
@@ -955,8 +956,8 @@ const Store = (() => {
         startWeight: profile.startWeight || null,
         totalLost: 0,
         bmi: null,
-        weightChange7d: 0,
-        weightChange30d: 0,
+        weightChange7d: null,
+        weightChange30d: null,
         avgWeeklyLoss: 0,
         streak: 0,
         totalEntries: 0,
@@ -993,8 +994,8 @@ const Store = (() => {
         startWeight: null,
         totalLost: null,
         bmi: null,
-        weightChange7d: 0,
-        weightChange30d: 0,
+        weightChange7d: null,
+        weightChange30d: null,
         avgWeeklyLoss: 0,
         streak: 0,
         totalEntries: 0,
@@ -1061,8 +1062,8 @@ const Store = (() => {
     const parsedWeight30d = weight30dAgo
       ? (settings.weightUnit === 'st' ? normalizeStoneValue(weight30dAgo.weight) : parseFloat(weight30dAgo.weight))
       : null;
-    const weightChange7d = Number.isFinite(parsedWeight7d) ? currentW - parsedWeight7d : 0;
-    const weightChange30d = Number.isFinite(parsedWeight30d) ? currentW - parsedWeight30d : 0;
+    const weightChange7d = Number.isFinite(parsedWeight7d) ? currentW - parsedWeight7d : null;
+    const weightChange30d = Number.isFinite(parsedWeight30d) ? currentW - parsedWeight30d : null;
 
     // Average weekly loss
     const daysDiff = (current._localDate - weights[0]._localDate) / (1000 * 60 * 60 * 24);
@@ -1330,7 +1331,8 @@ const Store = (() => {
   // Optimized O(n) sliding window instead of O(n²) nested filter
   function parseWeight(value) {
     var unit = getSettings().weightUnit;
-    return unit === 'st' ? normalizeStoneValue(value) : parseFloat(value);
+    var result = unit === 'st' ? normalizeStoneValue(value) : parseFloat(value);
+    return Number.isFinite(result) ? result : NaN;
   }
 
   function getMovingAverage(windowDays) {
@@ -1805,6 +1807,7 @@ const Store = (() => {
           mood: toNumber(entry.mood),
           energy: toNumber(entry.energy),
           text: toStringOrEmpty(entry.text),
+          symptoms: Array.isArray(entry.symptoms) ? entry.symptoms.filter(s => typeof s === 'string') : [],
         };
       }).filter(Boolean).sort(sortByLocalDate);
     }
@@ -1822,7 +1825,7 @@ const Store = (() => {
           completed: !!entry.completed,
           note: toStringOrEmpty(entry.note),
         };
-      }).filter(Boolean);
+      }).filter(Boolean).sort(function(a, b) { return new Date(a.startTime) - new Date(b.startTime); });
     }
 
     function sanitizeExercises(exercises) {
@@ -2109,7 +2112,11 @@ const Store = (() => {
     var prevPrevMonday = new Date(prevMonday);
     prevPrevMonday.setDate(prevPrevMonday.getDate() - 7);
 
-    var weekId = now.getFullYear() + '-W' + String(Math.ceil(((thisMonday - new Date(now.getFullYear(), 0, 1)) / 86400000 + 1) / 7)).padStart(2, '0');
+    var jan4 = new Date(thisMonday.getFullYear(), 0, 4);
+    var jan4Monday = new Date(jan4);
+    jan4Monday.setDate(jan4Monday.getDate() - ((jan4.getDay() + 6) % 7));
+    var isoWeekNum = Math.round((thisMonday - jan4Monday) / 604800000) + 1;
+    var weekId = thisMonday.getFullYear() + '-W' + String(isoWeekNum).padStart(2, '0');
 
     // Check if dismissed
     var dismissed = [];
@@ -2153,8 +2160,8 @@ const Store = (() => {
       var exerciseMinutes = wExercises.reduce(function(sum, e) { return sum + (parseFloat(e.duration) || 0); }, 0);
 
       // Mood/Energy
-      var moods = wJournal.filter(function(j) { return j.mood; }).map(function(j) { return parseFloat(j.mood); });
-      var energies = wJournal.filter(function(j) { return j.energy; }).map(function(j) { return parseFloat(j.energy); });
+      var moods = wJournal.filter(function(j) { return j.mood != null && j.mood !== ''; }).map(function(j) { return parseFloat(j.mood); });
+      var energies = wJournal.filter(function(j) { return j.energy != null && j.energy !== ''; }).map(function(j) { return parseFloat(j.energy); });
       var avgMood = moods.length > 0 ? Math.round(moods.reduce(function(a, b) { return a + b; }, 0) / moods.length * 10) / 10 : null;
       var avgEnergy = energies.length > 0 ? Math.round(energies.reduce(function(a, b) { return a + b; }, 0) / energies.length * 10) / 10 : null;
 
@@ -2320,12 +2327,12 @@ const Store = (() => {
     if (weights.length >= 4 && exercises.length >= 2 && stats.daysOnPlan >= 28) {
       var weekBuckets = {};
       weights.forEach(function(w) {
-        var weekKey = w.date.substring(0, 7) + '-W' + Math.floor(w._localDate.getDate() / 7);
+        var weekKey = w.date.substring(0, 7) + '-W' + Math.ceil(w._localDate.getDate() / 7);
         if (!weekBuckets[weekKey]) weekBuckets[weekKey] = { weights: [], exercises: 0 };
         weekBuckets[weekKey].weights.push(parseWeight(w.weight));
       });
       exercises.forEach(function(e) {
-        var weekKey = e.date.substring(0, 7) + '-W' + Math.floor(e._localDate.getDate() / 7);
+        var weekKey = e.date.substring(0, 7) + '-W' + Math.ceil(e._localDate.getDate() / 7);
         if (weekBuckets[weekKey]) weekBuckets[weekKey].exercises++;
       });
       var activeWeeks = [], inactiveWeeks = [];
@@ -2351,7 +2358,7 @@ const Store = (() => {
       jabs.forEach(function(j) { jabDates[j.date] = true; });
       var doseDayMoods = [], nonDoseMoods = [];
       journal.forEach(function(j) {
-        if (!j.mood) return;
+        if (j.mood == null || j.mood === '') return;
         if (jabDates[j.date]) doseDayMoods.push(parseFloat(j.mood));
         else nonDoseMoods.push(parseFloat(j.mood));
       });
@@ -2519,7 +2526,7 @@ const Store = (() => {
         weightLost = Math.round((first - last) * 100) / 100;
       }
 
-      var moods = mJournal.filter(function(j) { return j.mood; }).map(function(j) { return parseFloat(j.mood); });
+      var moods = mJournal.filter(function(j) { return j.mood != null && j.mood !== ''; }).map(function(j) { return parseFloat(j.mood); });
       var avgMood = moods.length > 0 ? Math.round(moods.reduce(function(a, b) { return a + b; }, 0) / moods.length * 10) / 10 : null;
 
       var exerciseMin = mExercises.reduce(function(sum, e) { return sum + (parseFloat(e.duration) || 0); }, 0);
